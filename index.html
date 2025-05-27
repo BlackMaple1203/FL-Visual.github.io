@@ -8,9 +8,11 @@
     <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.3/css/all.min.css">
 </head>
-<body>
-    <header>
+<body>    <header>
         <h1><i class="fas fa-network-wired"></i> 联邦学习可视化演示系统</h1>
+        <button class="help-button" id="help-btn" title="帮助">
+            <i class="fas fa-question"></i>
+        </button>
     </header>
 
     <div class="container">
@@ -105,13 +107,82 @@
             </div>
         </div>
     </template>
-    
-    <div id="message-log" class="message-log">
+      <div id="message-log" class="message-log">
         <div class="message-log-header">
             <h3>训练日志</h3>
             <button id="clear-log-btn" class="btn btn-small"><i class="fas fa-trash-alt"></i> 清除</button>
         </div>
         <div id="log-content"></div>
+    </div>
+
+    <!-- 帮助弹窗 -->
+    <div id="help-modal" class="modal-overlay">
+        <div class="modal">
+            <div class="modal-header">
+                <h2 class="modal-title"><i class="fas fa-question-circle"></i> 使用帮助</h2>
+                <button class="modal-close" id="help-close-btn">&times;</button>
+            </div>
+            <div class="modal-content">
+                <h3>🎯 系统概述</h3>
+                <p>联邦学习可视化演示系统帮助您直观理解联邦学习的训练过程，通过可视化界面展示多个节点协同训练全局模型的完整流程。</p>
+                
+                <h3>🖱️ 界面操作</h3>
+                <div class="feature-list">
+                    <ul>
+                        <li><strong>节点拖拽：</strong>点击并拖动节点标题栏可以重新排列节点位置，让您自定义网络拓扑布局</li>
+                        <li><strong>容器调整：</strong>网络显示区域右下角可拖拽调整大小，双击网络区域可重置为默认大小</li>
+                        <li><strong>数据上传：</strong>点击节点中的上传区域可选择多张图片作为该节点的训练数据</li>
+                        <li><strong>参数调整：</strong>使用左侧控制面板的 + / - 按钮调整训练轮数和参与客户端数量</li>
+                    </ul>
+                </div>
+
+                <h3>⚙️ 训练参数</h3>
+                <ul>
+                    <li><span class="highlight">训练轮数</span>：设置联邦学习的总轮数（1-10轮）</li>
+                    <li><span class="highlight">每轮参与客户端数</span>：设置每轮参与训练的节点数量，0表示全部节点参与</li>
+                </ul>
+
+                <h3>🔄 训练流程</h3>
+                <ol>
+                    <li><strong>添加节点：</strong>使用"添加节点"按钮创建客户端节点（最多8个）</li>
+                    <li><strong>上传数据：</strong>为每个节点上传训练图片数据</li>
+                    <li><strong>设置参数：</strong>配置训练轮数和参与客户端数量</li>
+                    <li><strong>开始训练：</strong>点击"开始训练"观察联邦学习过程</li>
+                    <li><strong>观察过程：</strong>通过节点颜色变化和日志信息了解训练进展</li>
+                </ol>
+
+                <h3>🎨 状态指示</h3>
+                <ul>
+                    <li><strong>蓝色脉冲：</strong>节点正在进行本地训练</li>
+                    <li><strong>淡蓝色：</strong>节点正在上传模型参数</li>
+                    <li><strong>绿色：</strong>节点训练完成</li>
+                    <li><strong>中心节点颜色变化：</strong>表示全局模型聚合状态</li>
+                </ul>
+
+                <h3>💡 使用技巧</h3>
+                <div class="feature-list">
+                    <ul>
+                        <li>训练过程中可以随时点击"停止训练"终止当前轮次</li>
+                        <li>使用"重置"按钮可清空所有节点和设置，重新开始</li>
+                        <li>右侧训练状态面板实时显示当前训练进度</li>
+                        <li>训练日志记录了详细的操作和状态信息</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 错误提示弹窗 -->
+    <div id="error-modal" class="modal-overlay error-modal">
+        <div class="modal">
+            <div class="modal-header">
+                <h2 class="modal-title"><i class="fas fa-exclamation-triangle"></i> 错误提示</h2>
+                <button class="modal-close" id="error-close-btn">&times;</button>
+            </div>
+            <div class="modal-content">
+                <p id="error-message"></p>
+            </div>
+        </div>
     </div>
 
     <script src="main.js"></script>

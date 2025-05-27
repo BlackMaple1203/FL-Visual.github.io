@@ -177,6 +177,7 @@ function completeTraining() {
     });
     
     window.federatedUI.addLogMessage(`最终模型准确率: ${globalModel.accuracy.toFixed(2)}%`, 'highlight');
+    window.federatedUI.addLogMessage('联邦学习训练完成 ✅', 'highlight');
     
     trainingComplete = true;
     window.federatedUI.finishTraining();
@@ -196,7 +197,7 @@ function handleTrainingStop() {
     // 更新中心节点状态
     window.federatedUI.updateCentralNodeStatus('idle', "训练已停止");
     
-    // 结束训练
+    // 结束训练（不添加完成日志）
     window.federatedUI.finishTraining();
 }
 

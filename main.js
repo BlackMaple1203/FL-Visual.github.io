@@ -1,5 +1,4 @@
-document.addEventListener('DOMContentLoaded', () => {
-    // DOM元素引用
+document.addEventListener('DOMContentLoaded', () => {    // DOM元素引用
     const addNodeBtn = document.getElementById('add-node-btn');
     const startTrainingBtn = document.getElementById('start-training-btn');
     const stopTrainingBtn = document.getElementById('stop-training-btn');
@@ -11,6 +10,14 @@ document.addEventListener('DOMContentLoaded', () => {
     const logContent = document.getElementById('log-content');
     const nodeTemplate = document.getElementById('node-template');
     const networkContainer = document.getElementById('network-container');
+    
+    // 弹窗相关元素
+    const helpBtn = document.getElementById('help-btn');
+    const helpModal = document.getElementById('help-modal');
+    const helpCloseBtn = document.getElementById('help-close-btn');
+    const errorModal = document.getElementById('error-modal');
+    const errorCloseBtn = document.getElementById('error-close-btn');
+    const errorMessage = document.getElementById('error-message');
     
     // 训练参数控制
     const roundNumber = document.getElementById('round-number');
@@ -288,14 +295,14 @@ document.addEventListener('DOMContentLoaded', () => {
             value = 8;
         }
         clientNumber.value = value;
-    });
-
-    // 开始训练
+    });    // 开始训练
     startTrainingBtn.addEventListener('click', () => {
         if (isTraining) return;
         
         if (nodes.length === 0) {
-            addLogMessage('请至少添加一个训练节点', 'warning');
+            const message = '请至少添加一个训练节点才能开始训练！';
+            addLogMessage(message, 'warning');
+            showErrorModal(message);
             return;
         }
         
@@ -303,14 +310,18 @@ document.addEventListener('DOMContentLoaded', () => {
         const emptyNodes = nodes.filter(node => node.images.length === 0);
         if (emptyNodes.length > 0) {
             const nodeIds = emptyNodes.map(n => n.id).join(', ');
-            addLogMessage(`节点 ${nodeIds} 没有上传图片数据`, 'warning');
+            const message = `节点 ${nodeIds} 没有上传图片数据，请先为所有节点上传训练数据！`;
+            addLogMessage(message, 'warning');
+            showErrorModal(message);
             return;
         }
         
         // 检查客户端参与数量
         const participatingClients = parseInt(clientNumber.value);
         if (participatingClients > nodes.length) {
-            addLogMessage(`设置的参与客户端数(${participatingClients})大于实际节点数(${nodes.length})`, 'warning');
+            const message = `设置的参与客户端数(${participatingClients})大于实际节点数(${nodes.length})，请调整参数！`;
+            addLogMessage(message, 'warning');
+            showErrorModal(message);
             return;
         }
         
@@ -370,12 +381,52 @@ document.addEventListener('DOMContentLoaded', () => {
         
         // 添加日志
         addLogMessage('系统已重置');
-    });
-
-    // 清除日志
+    });    // 清除日志
     clearLogBtn.addEventListener('click', () => {
         logContent.innerHTML = '';
     });
+
+    // 帮助按钮事件
+    helpBtn.addEventListener('click', () => {
+        helpModal.classList.add('show');
+    });
+
+    // 关闭帮助弹窗
+    helpCloseBtn.addEventListener('click', () => {
+        helpModal.classList.remove('show');
+    });
+
+    // 关闭错误弹窗
+    errorCloseBtn.addEventListener('click', () => {
+        errorModal.classList.remove('show');
+    });
+
+    // 点击弹窗背景关闭
+    helpModal.addEventListener('click', (e) => {
+        if (e.target === helpModal) {
+            helpModal.classList.remove('show');
+        }
+    });
+
+    errorModal.addEventListener('click', (e) => {
+        if (e.target === errorModal) {
+            errorModal.classList.remove('show');
+        }
+    });
+
+    // ESC键关闭弹窗
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape') {
+            helpModal.classList.remove('show');
+            errorModal.classList.remove('show');
+        }
+    });
+
+    // 显示错误弹窗
+    function showErrorModal(message) {
+        errorMessage.textContent = message;
+        errorModal.classList.add('show');
+    }
 
     // 根据ID获取节点对象
     function getNodeById(id) {
@@ -416,18 +467,16 @@ document.addEventListener('DOMContentLoaded', () => {
         updateCentralNodeStatus,
         finishTraining,
         addLogMessage
-    };
-
-    function updateNodeStatus(nodeId, status, message) {
+    };    function updateNodeStatus(nodeId, status, message) {
         const node = getNodeById(nodeId);
         if (!node) return;
         
         const statusElement = node.element.querySelector('.node-status');
         
         // 强制保存当前精确位置
-        const computedStyle = window.getComputedStyle(node.element);
         const currentLeft = node.element.style.left;
         const currentTop = node.element.style.top;
+        const currentTransform = node.element.style.transform || 'translate(-50%, -50%)';
         
         // 更新状态
         node.status = status;
@@ -435,14 +484,7 @@ document.addEventListener('DOMContentLoaded', () => {
         // 移除所有状态类
         node.element.classList.remove('training', 'uploading', 'complete');
         
-        // 立即重新应用位置，防止任何偏移
-        if (currentLeft && currentTop) {
-            node.element.style.left = currentLeft;
-            node.element.style.top = currentTop;
-            node.element.style.transform = 'translate(-50%, -50%)';
-        }
-        
-        // 添加新状态类
+        // 添加新状态类和文本
         if (status === 'training') {
             statusElement.textContent = '本地训练中...';
             node.element.classList.add('training');
@@ -456,12 +498,22 @@ document.addEventListener('DOMContentLoaded', () => {
             statusElement.textContent = '待机中';
         }
         
-        // 再次强制保持位置（在状态类添加后）
+        // 强制恢复并保持原始位置（同步执行，确保不被动画覆盖）
+        if (currentLeft && currentTop) {
+            node.element.style.left = currentLeft;
+            node.element.style.top = currentTop;
+            node.element.style.transform = currentTransform;
+            
+            // 使用 important 强制覆盖任何动画变换
+            node.element.style.setProperty('transform', currentTransform, 'important');
+        }
+        
+        // 双重保险：下一帧再次确保位置
         requestAnimationFrame(() => {
             if (currentLeft && currentTop) {
                 node.element.style.left = currentLeft;
                 node.element.style.top = currentTop;
-                node.element.style.transform = 'translate(-50%, -50%)';
+                node.element.style.setProperty('transform', currentTransform, 'important');
             }
         });
         
@@ -472,26 +524,18 @@ document.addEventListener('DOMContentLoaded', () => {
             statusDisplay.appendChild(statusUpdate);
             statusDisplay.scrollTop = statusDisplay.scrollHeight;
         }
-    }
-
-    function updateCentralNodeStatus(status, message) {
+    }    function updateCentralNodeStatus(status, message) {
         const statusElement = centralNode.querySelector('.node-status');
         
         // 强制保存当前精确位置
-        const currentLeft = centralNode.style.left;
-        const currentTop = centralNode.style.top;
+        const currentLeft = centralNode.style.left || '50%';
+        const currentTop = centralNode.style.top || '50%';
+        const currentTransform = centralNode.style.transform || 'translate(-50%, -50%)';
         
         // 移除所有状态类
         centralNode.classList.remove('training', 'uploading', 'complete');
         
-        // 立即重新应用位置，防止任何偏移
-        if (currentLeft && currentTop) {
-            centralNode.style.left = currentLeft;
-            centralNode.style.top = currentTop;
-            centralNode.style.transform = 'translate(-50%, -50%)';
-        }
-        
-        // 添加新状态类
+        // 添加新状态类和文本
         if (status === 'aggregating') {
             statusElement.textContent = '聚合模型参数...';
             centralNode.classList.add('training');
@@ -505,13 +549,16 @@ document.addEventListener('DOMContentLoaded', () => {
             statusElement.textContent = '待机中';
         }
         
-        // 再次强制保持位置（在状态类添加后）
+        // 强制恢复并保持原始位置
+        centralNode.style.left = currentLeft;
+        centralNode.style.top = currentTop;
+        centralNode.style.setProperty('transform', currentTransform, 'important');
+        
+        // 双重保险：下一帧再次确保位置
         requestAnimationFrame(() => {
-            if (currentLeft && currentTop) {
-                centralNode.style.left = currentLeft;
-                centralNode.style.top = currentTop;
-                centralNode.style.transform = 'translate(-50%, -50%)';
-            }
+            centralNode.style.left = currentLeft;
+            centralNode.style.top = currentTop;
+            centralNode.style.setProperty('transform', currentTransform, 'important');
         });
         
         // 更新状态显示
@@ -521,16 +568,13 @@ document.addEventListener('DOMContentLoaded', () => {
             statusDisplay.appendChild(statusUpdate);
             statusDisplay.scrollTop = statusDisplay.scrollHeight;
         }
-    }
-
-    function finishTraining() {
+    }    function finishTraining() {
         isTraining = false;
         startTrainingBtn.disabled = false;
         stopTrainingBtn.disabled = true;  // 禁用停止按钮
         addNodeBtn.disabled = false;
         
-        // 添加最终日志
-        addLogMessage('联邦学习训练完成 ✅', 'highlight');
+        // 不自动添加"训练完成"日志，由调用方决定是否添加
     }
 
     // 设置中心节点的拖拽功能
