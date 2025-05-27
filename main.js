@@ -161,13 +161,16 @@ document.addEventListener('DOMContentLoaded', () => {
             startX = e.clientX;
             startY = e.clientY;
             
-            // 获取容器和节点位置信息（只获取一次以提高性能）
+            // 获取容器和节点位置信息
             containerRect = networkContainer.getBoundingClientRect();
             nodeRect = currentDragNode.getBoundingClientRect();
             
-            // 计算节点相对于容器的起始位置
-            nodeStartX = nodeRect.left - containerRect.left;
-            nodeStartY = nodeRect.top - containerRect.top;
+            // 计算节点中心相对于容器的当前位置（百分比）
+            const nodeCenterX = nodeRect.left + nodeRect.width / 2 - containerRect.left;
+            const nodeCenterY = nodeRect.top + nodeRect.height / 2 - containerRect.top;
+            
+            nodeStartX = (nodeCenterX / containerRect.width) * 100;
+            nodeStartY = (nodeCenterY / containerRect.height) * 100;
             
             // 添加拖动类，以实现视觉反馈
             nodeElement.classList.add('dragging');
@@ -189,44 +192,29 @@ document.addEventListener('DOMContentLoaded', () => {
         
         // 使用requestAnimationFrame优化渲染性能
         rafId = requestAnimationFrame(() => {
-            // 计算移动距离
+            // 计算鼠标移动距离（像素）
             const deltaX = e.clientX - startX;
             const deltaY = e.clientY - startY;
             
-            // 计算新位置（相对于容器）
-            let newX = nodeStartX + deltaX;
-            let newY = nodeStartY + deltaY;
+            // 转换为百分比移动距离
+            const deltaXPercent = (deltaX / containerRect.width) * 100;
+            const deltaYPercent = (deltaY / containerRect.height) * 100;
             
-            // 限制节点在容器内
-            const maxX = containerRect.width;
-            const maxY = containerRect.height;
+            // 计算新位置（百分比）
+            let newXPercent = nodeStartX + deltaXPercent;
+            let newYPercent = nodeStartY + deltaYPercent;
             
-            // 转换为百分比位置
-            const xPercent = (newX / containerRect.width) * 100;
-            const yPercent = (newY / containerRect.height) * 100;
+            // 限制节点在容器内（考虑节点大小的一半）
+            const nodeSize = currentDragNode.id === 'central-node' ? 75 : 75; // 节点半径的百分比估算
+            const safeMargin = (nodeSize / Math.min(containerRect.width, containerRect.height)) * 100;
             
-            // 判断是否为中心节点
-            if (currentDragNode.id === 'central-node') {
-                // 中心节点使用百分比定位
-                currentDragNode.style.left = `${xPercent}%`;
-                currentDragNode.style.top = `${yPercent}%`;
-            } else {
-                // 客户端节点使用百分比定位
-                const nodeWidth = nodeRect.width;
-                const nodeHeight = nodeRect.height;
-                
-                // 将位置从像素转换为百分比
-                const widthPercent = (nodeWidth / containerRect.width) * 100;
-                const heightPercent = (nodeHeight / containerRect.height) * 100;
-                
-                // 限制不超出边界
-                const limitedXPercent = Math.max(0, Math.min(xPercent, 100 - widthPercent/2));
-                const limitedYPercent = Math.max(0, Math.min(yPercent, 100 - heightPercent/2));
-                
-                currentDragNode.style.left = `${limitedXPercent}%`;
-                currentDragNode.style.top = `${limitedYPercent}%`;
-                currentDragNode.style.transform = 'translate(-50%, -50%)';
-            }
+            newXPercent = Math.max(safeMargin, Math.min(newXPercent, 100 - safeMargin));
+            newYPercent = Math.max(safeMargin, Math.min(newYPercent, 100 - safeMargin));
+            
+            // 应用位置
+            currentDragNode.style.left = `${newXPercent}%`;
+            currentDragNode.style.top = `${newYPercent}%`;
+            currentDragNode.style.transform = 'translate(-50%, -50%)';
         });
     });
     
@@ -241,7 +229,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         
         if (currentDragNode) {
-            // 不再需要转换，保持百分比定位
+            // 移除拖动状态
             currentDragNode.classList.remove('dragging');
             currentDragNode = null;
         }
@@ -436,11 +424,23 @@ document.addEventListener('DOMContentLoaded', () => {
         
         const statusElement = node.element.querySelector('.node-status');
         
+        // 强制保存当前精确位置
+        const computedStyle = window.getComputedStyle(node.element);
+        const currentLeft = node.element.style.left;
+        const currentTop = node.element.style.top;
+        
         // 更新状态
         node.status = status;
         
         // 移除所有状态类
         node.element.classList.remove('training', 'uploading', 'complete');
+        
+        // 立即重新应用位置，防止任何偏移
+        if (currentLeft && currentTop) {
+            node.element.style.left = currentLeft;
+            node.element.style.top = currentTop;
+            node.element.style.transform = 'translate(-50%, -50%)';
+        }
         
         // 添加新状态类
         if (status === 'training') {
@@ -452,7 +452,18 @@ document.addEventListener('DOMContentLoaded', () => {
         } else if (status === 'complete') {
             statusElement.textContent = '训练完成';
             node.element.classList.add('complete');
+        } else if (status === 'idle') {
+            statusElement.textContent = '待机中';
         }
+        
+        // 再次强制保持位置（在状态类添加后）
+        requestAnimationFrame(() => {
+            if (currentLeft && currentTop) {
+                node.element.style.left = currentLeft;
+                node.element.style.top = currentTop;
+                node.element.style.transform = 'translate(-50%, -50%)';
+            }
+        });
         
         // 更新状态显示
         if (message) {
@@ -466,12 +477,19 @@ document.addEventListener('DOMContentLoaded', () => {
     function updateCentralNodeStatus(status, message) {
         const statusElement = centralNode.querySelector('.node-status');
         
-        // 保存当前位置
+        // 强制保存当前精确位置
         const currentLeft = centralNode.style.left;
         const currentTop = centralNode.style.top;
         
         // 移除所有状态类
         centralNode.classList.remove('training', 'uploading', 'complete');
+        
+        // 立即重新应用位置，防止任何偏移
+        if (currentLeft && currentTop) {
+            centralNode.style.left = currentLeft;
+            centralNode.style.top = currentTop;
+            centralNode.style.transform = 'translate(-50%, -50%)';
+        }
         
         // 添加新状态类
         if (status === 'aggregating') {
@@ -483,17 +501,18 @@ document.addEventListener('DOMContentLoaded', () => {
         } else if (status === 'complete') {
             statusElement.textContent = '训练完成';
             centralNode.classList.add('complete');
+        } else if (status === 'idle') {
+            statusElement.textContent = '待机中';
         }
         
-        // 确保位置不变
-        if (currentLeft && currentTop) {
-            // 设置一个短暂延迟，确保在状态类应用后恢复位置
-            setTimeout(() => {
+        // 再次强制保持位置（在状态类添加后）
+        requestAnimationFrame(() => {
+            if (currentLeft && currentTop) {
                 centralNode.style.left = currentLeft;
                 centralNode.style.top = currentTop;
                 centralNode.style.transform = 'translate(-50%, -50%)';
-            }, 5);
-        }
+            }
+        });
         
         // 更新状态显示
         if (message) {
@@ -538,10 +557,12 @@ document.addEventListener('DOMContentLoaded', () => {
             containerRect = networkContainer.getBoundingClientRect();
             nodeRect = centralNode.getBoundingClientRect();
             
-            // 计算节点相对于容器的起始位置
-            // 注意：中心节点使用transform:translate(-50%, -50%)进行居中，所以需要特殊处理
-            nodeStartX = nodeRect.left - containerRect.left + nodeRect.width / 2;
-            nodeStartY = nodeRect.top - containerRect.top + nodeRect.height / 2;
+            // 计算节点中心相对于容器的当前位置（百分比）
+            const nodeCenterX = nodeRect.left + nodeRect.width / 2 - containerRect.left;
+            const nodeCenterY = nodeRect.top + nodeRect.height / 2 - containerRect.top;
+            
+            nodeStartX = (nodeCenterX / containerRect.width) * 100;
+            nodeStartY = (nodeCenterY / containerRect.height) * 100;
             
             // 添加拖动类
             centralNode.classList.add('dragging');
@@ -558,8 +579,13 @@ document.addEventListener('DOMContentLoaded', () => {
         const resizeObserver = new ResizeObserver(entries => {
             for (let entry of entries) {
                 if (entry.target === networkContainer) {
-                    // 容器大小变化时，调整节点位置
-                    adjustNodesPositionOnResize();
+                    // 使用防抖来避免频繁调整
+                    if (this.resizeTimeout) {
+                        clearTimeout(this.resizeTimeout);
+                    }
+                    this.resizeTimeout = setTimeout(() => {
+                        adjustNodesPositionOnResize();
+                    }, 100);
                 }
             }
         });
@@ -580,8 +606,10 @@ document.addEventListener('DOMContentLoaded', () => {
             networkContainer.style.width = '';
             networkContainer.style.height = '600px';
             
-            // 通知容器大小变化
-            adjustNodesPositionOnResize();
+            // 延迟一帧后调整节点位置，确保容器大小已更新
+            requestAnimationFrame(() => {
+                adjustNodesPositionOnResize();
+            });
         });
     }
     
@@ -594,26 +622,51 @@ document.addEventListener('DOMContentLoaded', () => {
         const containerWidth = networkContainer.clientWidth;
         const containerHeight = networkContainer.clientHeight;
         
-        // 调整节点位置
+        // 调整客户端节点位置
         nodes.forEach(node => {
-            // 获取节点当前位置（相对于容器的百分比）
-            const nodeRect = node.element.getBoundingClientRect();
-            const containerRect = networkContainer.getBoundingClientRect();
+            // 获取节点当前的百分比位置
+            const currentLeft = parseFloat(node.element.style.left) || 50;
+            const currentTop = parseFloat(node.element.style.top) || 50;
             
-            // 计算节点左上角相对于容器的位置（像素）
-            const leftPx = nodeRect.left - containerRect.left;
-            const topPx = nodeRect.top - containerRect.top;
+            // 确保节点位置在合理范围内（考虑节点自身大小）
+            const nodeWidth = 150; // 节点宽度
+            const nodeHeight = 200; // 节点高度（估算）
             
-            // 将位置转换为相对于容器的百分比
-            const leftPercent = (leftPx / containerRect.width) * 100;
-            const topPercent = (topPx / containerRect.height) * 100;
+            // 计算安全边界（百分比）
+            const maxLeft = 100 - (nodeWidth / containerWidth) * 50; // 50%是因为transform: translate(-50%, -50%)
+            const maxTop = 100 - (nodeHeight / containerHeight) * 50;
+            const minLeft = (nodeWidth / containerWidth) * 50;
+            const minTop = (nodeHeight / containerHeight) * 50;
             
-            // 应用新位置（使用百分比以适应容器大小变化）
-            node.element.style.left = `${leftPercent}%`;
-            node.element.style.top = `${topPercent}%`;
+            // 限制位置在安全范围内
+            const safeLeft = Math.max(minLeft, Math.min(currentLeft, maxLeft));
+            const safeTop = Math.max(minTop, Math.min(currentTop, maxTop));
+            
+            // 应用位置
+            node.element.style.left = `${safeLeft}%`;
+            node.element.style.top = `${safeTop}%`;
+            node.element.style.transform = 'translate(-50%, -50%)';
         });
         
+        // 调整中心节点位置（确保它保持在中心附近）
+        const centralLeft = parseFloat(centralNode.style.left) || 50;
+        const centralTop = parseFloat(centralNode.style.top) || 50;
+        
+        // 中心节点的安全边界
+        const centralSize = 150; // 中心节点大小
+        const centralMaxLeft = 100 - (centralSize / containerWidth) * 50;
+        const centralMaxTop = 100 - (centralSize / containerHeight) * 50;
+        const centralMinLeft = (centralSize / containerWidth) * 50;
+        const centralMinTop = (centralSize / containerHeight) * 50;
+        
+        const safeCentralLeft = Math.max(centralMinLeft, Math.min(centralLeft, centralMaxLeft));
+        const safeCentralTop = Math.max(centralMinTop, Math.min(centralTop, centralMaxTop));
+        
+        centralNode.style.left = `${safeCentralLeft}%`;
+        centralNode.style.top = `${safeCentralTop}%`;
+        centralNode.style.transform = 'translate(-50%, -50%)';
+        
         // 添加日志记录
-        addLogMessage("网络显示区域大小已调整");
+        addLogMessage("网络显示区域大小已调整，节点位置已重新校准");
     }
 });
