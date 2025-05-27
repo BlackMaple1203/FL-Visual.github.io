@@ -1,0 +1,346 @@
+{% extends "base.html" %}
+
+{% block title %}客户端控制台 - 联邦学习系统{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/client.css') }}">
+{% endblock %}
+
+{% block content %}
+<div class="client-dashboard">
+    <!-- 页面标题 -->
+    <div class="dashboard-header">
+        <h1><i class="fas fa-laptop"></i> 客户端控制台</h1>
+        <div class="client-status">
+            <span class="status-indicator" id="connection-status"></span>
+            <span id="status-text">连接中...</span>
+        </div>
+    </div>
+
+    <div class="container-fluid">
+        <div class="row">
+            <!-- 左侧：文件上传和训练控制 -->
+            <div class="col-lg-6">
+                <div class="card mb-4">
+                    <div class="card-header">
+                        <h3><i class="fas fa-upload"></i> 数据上传</h3>
+                    </div>
+                    <div class="card-body">
+                        <div class="upload-area" id="upload-area">
+                            <div class="upload-content">
+                                <i class="fas fa-cloud-upload-alt fa-3x mb-3"></i>
+                                <h4>上传 .nii.gz 文件</h4>
+                                <p>拖拽文件到此处或点击选择文件</p>
+                                <input type="file" id="file-input" accept=".nii.gz,.gz" multiple hidden>
+                                <button class="btn btn-outline-primary" onclick="document.getElementById('file-input').click()">
+                                    选择文件
+                                </button>
+                            </div>
+                        </div>
+                        
+                        <!-- 已上传文件列表 -->
+                        <div id="uploaded-files" class="uploaded-files mt-3">
+                            <h5>已上传文件:</h5>
+                            <div id="files-list" class="files-list">
+                                <!-- 动态添加文件列表 -->
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 训练控制 -->
+                <div class="card mb-4">
+                    <div class="card-header">
+                        <h3><i class="fas fa-cogs"></i> 训练控制</h3>
+                    </div>
+                    <div class="card-body">
+                        <div class="training-controls">
+                            <button id="start-training" class="btn btn-success btn-lg me-2" disabled>
+                                <i class="fas fa-play"></i> 开始训练
+                            </button>
+                            <button id="stop-training" class="btn btn-danger btn-lg" disabled>
+                                <i class="fas fa-stop"></i> 停止训练
+                            </button>
+                        </div>
+                        
+                        <div class="training-info mt-3">
+                            <div class="row">
+                                <div class="col-6">
+                                    <div class="info-item">
+                                        <label>训练状态:</label>
+                                        <span id="training-status" class="badge bg-secondary">等待中</span>
+                                    </div>
+                                </div>
+                                <div class="col-6">
+                                    <div class="info-item">
+                                        <label>当前轮次:</label>
+                                        <span id="current-round">0/0</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 右侧：统计、图表和日志 -->
+            <div class="col-lg-6">
+                <!-- 统计卡片 -->
+                <div class="row mb-4">
+                    <div class="col-6">
+                        <div class="card stats-card bg-primary text-white">
+                            <div class="card-body text-center">
+                                <i class="fas fa-database fa-2x mb-2"></i>
+                                <h3 id="total-sessions">0</h3>
+                                <p class="mb-0">总训练次数</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-6">
+                        <div class="card stats-card bg-success text-white">
+                            <div class="card-body text-center">
+                                <i class="fas fa-check-circle fa-2x mb-2"></i>
+                                <h3 id="completed-sessions">0</h3>
+                                <p class="mb-0">完成训练</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- 服务器状态 -->
+                <div class="card mb-4">
+                    <div class="card-header">
+                        <h3><i class="fas fa-server"></i> 服务器状态</h3>
+                    </div>
+                    <div class="card-body">
+                        <div class="row">
+                            <div class="col-6">
+                                <div class="server-stat">
+                                    <label>连接状态:</label>
+                                    <span id="server-status" class="badge bg-success">在线</span>
+                                </div>
+                                <div class="server-stat">
+                                    <label>当前轮次:</label>
+                                    <span id="server-round">5/10</span>
+                                </div>
+                            </div>
+                            <div class="col-6">
+                                <div class="server-stat">
+                                    <label>连接客户端:</label>
+                                    <span id="connected-clients">3</span>
+                                </div>
+                                <div class="server-stat">
+                                    <label>模型准确率:</label>
+                                    <span id="model-accuracy">87%</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 最近训练记录 -->
+                <div class="card mb-4">
+                    <div class="card-header">
+                        <h3><i class="fas fa-history"></i> 最近训练</h3>
+                    </div>
+                    <div class="card-body">
+                        <div id="recent-sessions" class="recent-sessions">
+                            <!-- 动态加载最近训练记录 -->
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 模型性能图表 -->
+        <div class="row mt-4">
+            <div class="col-lg-6">
+                <div class="card mb-4">
+                    <div class="card-header d-flex justify-content-between align-items-center">
+                        <h3><i class="fas fa-chart-line"></i> 模型性能</h3>
+                        <div class="chart-controls">
+                            <button class="btn btn-sm btn-outline-primary" onclick="clientDash.refreshCharts()">
+                                <i class="fas fa-sync-alt"></i> 刷新
+                            </button>
+                        </div>
+                    </div>
+                    <div class="card-body">
+                        <div class="row">
+                            <div class="col-6">
+                                <canvas id="accuracy-chart" width="200" height="150"></canvas>
+                                <p class="text-center mt-2 small">准确率趋势</p>
+                            </div>
+                            <div class="col-6">
+                                <canvas id="loss-chart" width="200" height="150"></canvas>
+                                <p class="text-center mt-2 small">损失函数</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 训练参数设置 -->
+                <div class="card mb-4">
+                    <div class="card-header">
+                        <h3><i class="fas fa-sliders-h"></i> 训练参数</h3>
+                    </div>
+                    <div class="card-body">
+                        <div class="row">
+                            <div class="col-6">
+                                <div class="mb-3">
+                                    <label for="learning-rate" class="form-label">学习率:</label>
+                                    <input type="number" class="form-control" id="learning-rate" 
+                                           value="0.001" min="0.0001" max="1" step="0.0001">
+                                </div>
+                                <div class="mb-3">
+                                    <label for="batch-size" class="form-label">批次大小:</label>
+                                    <select class="form-select" id="batch-size">
+                                        <option value="16">16</option>
+                                        <option value="32" selected>32</option>
+                                        <option value="64">64</option>
+                                        <option value="128">128</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <div class="col-6">
+                                <div class="mb-3">
+                                    <label for="epochs" class="form-label">训练轮数:</label>
+                                    <input type="number" class="form-control" id="epochs" 
+                                           value="10" min="1" max="100">
+                                </div>
+                                <div class="mb-3">
+                                    <label for="optimizer" class="form-label">优化器:</label>
+                                    <select class="form-select" id="optimizer">
+                                        <option value="adam" selected>Adam</option>
+                                        <option value="sgd">SGD</option>
+                                        <option value="rmsprop">RMSprop</option>
+                                    </select>
+                                </div>
+                            </div>
+                        </div>
+                        <button class="btn btn-outline-primary btn-sm" onclick="clientDash.saveTrainingParams()">
+                            <i class="fas fa-save"></i> 保存参数
+                        </button>
+                    </div>
+                </div>
+
+                <!-- 训练日志 -->
+                <div class="card">
+                    <div class="card-header d-flex justify-content-between align-items-center">
+                        <h3><i class="fas fa-terminal"></i> 训练日志</h3>
+                        <button id="clear-log" class="btn btn-sm btn-outline-secondary">
+                            <i class="fas fa-eraser"></i> 清空
+                        </button>
+                    </div>
+                    <div class="card-body">
+                        <div id="training-log" class="training-log">
+                            <!-- 动态添加日志条目 -->
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 模型下载和导出 -->
+        <div class="row mt-4">
+            <div class="col-lg-8">
+                <div class="card">
+                    <div class="card-header">
+                        <h3><i class="fas fa-download"></i> 模型管理</h3>
+                    </div>
+                    <div class="card-body">
+                        <div class="row">
+                            <div class="col-6">
+                                <h5>已训练模型</h5>
+                                <div id="trained-models" class="trained-models">
+                                    <!-- 动态加载已训练模型列表 -->
+                                </div>
+                            </div>
+                            <div class="col-6">
+                                <h5>快捷操作</h5>
+                                <div class="d-grid gap-2">
+                                    <button class="btn btn-primary" onclick="clientDash.exportTrainingData()">
+                                        <i class="fas fa-file-export"></i> 导出训练数据
+                                    </button>
+                                    <button class="btn btn-success" onclick="clientDash.downloadBestModel()">
+                                        <i class="fas fa-crown"></i> 下载最佳模型
+                                    </button>
+                                    <button class="btn btn-info" onclick="clientDash.generateReport()">
+                                        <i class="fas fa-file-pdf"></i> 生成训练报告
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-lg-4">
+                <div class="card">
+                    <div class="card-header">
+                        <h3><i class="fas fa-info-circle"></i> 系统信息</h3>
+                    </div>
+                    <div class="card-body">
+                        <div class="system-info">
+                            <div class="info-item">
+                                <label>客户端版本:</label>
+                                <span>v1.0.0</span>
+                            </div>
+                            <div class="info-item">
+                                <label>上次连接:</label>
+                                <span id="last-connection">刚刚</span>
+                            </div>
+                            <div class="info-item">
+                                <label>数据使用量:</label>
+                                <span id="data-usage">125.6 MB</span>
+                            </div>
+                            <div class="info-item">
+                                <label>本地模型:</label>
+                                <span id="local-models">3 个</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 预测结果展示 -->
+        <div class="row mt-4">
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-header">
+                        <h3><i class="fas fa-brain"></i> 模型预测结果</h3>
+                    </div>
+                    <div class="card-body">
+                        <div id="prediction-results" class="prediction-results">
+                            <div class="text-center text-muted py-4">
+                                <i class="fas fa-brain fa-2x mb-2"></i>
+                                <p>训练完成后将显示预测结果</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 文件上传进度模态框 -->
+    <div class="modal fade" id="uploadModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">文件上传</h5>
+                </div>
+                <div class="modal-body">
+                    <div class="progress mb-3">
+                        <div id="upload-progress" class="progress-bar" role="progressbar" style="width: 0%"></div>
+                    </div>
+                    <div id="upload-status">准备上传...</div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="{{ url_for('static', filename='js/client.js') }}"></script>
+{% endblock %}
