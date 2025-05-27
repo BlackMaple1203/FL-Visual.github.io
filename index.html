@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>联邦学习可视化演示</title>
+    <link rel="stylesheet" href="styles.css">
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.3/css/all.min.css">
+</head>
+<body>
+    <header>
+        <h1>联邦学习可视化演示系统</h1>
+    </header>
+
+    <div class="container">
+        <!-- 左侧控制面板 -->
+        <div class="sidebar">
+            <div class="control-panel">
+                <h2>控制面板</h2>
+                <button id="add-node-btn" class="btn">添加节点</button>
+                
+                <div class="training-params">
+                    <h3>训练参数</h3>
+                    <div class="param-group">
+                        <label for="round-number">训练轮数:</label>
+                        <div class="input-with-buttons">
+                            <button class="btn-small btn-adjust" id="round-minus"><i class="fas fa-minus"></i></button>
+                            <input type="number" id="round-number" value="3" min="1" max="10">
+                            <button class="btn-small btn-adjust" id="round-plus"><i class="fas fa-plus"></i></button>
+                        </div>
+                    </div>
+                    
+                    <div class="param-group">
+                        <label for="client-number">每轮参与客户端数:</label>
+                        <div class="input-with-buttons">
+                            <button class="btn-small btn-adjust" id="client-minus"><i class="fas fa-minus"></i></button>
+                            <input type="number" id="client-number" value="0" min="0" max="8">
+                            <button class="btn-small btn-adjust" id="client-plus"><i class="fas fa-plus"></i></button>
+                        </div>
+                        <div class="param-hint">0表示全部参与</div>
+                    </div>
+                </div>
+                
+                <div class="training-controls">
+                    <button id="start-training-btn" class="btn btn-primary"><i class="fas fa-play"></i> 开始训练</button>
+                    <button id="stop-training-btn" class="btn btn-warning" disabled><i class="fas fa-stop"></i> 停止训练</button>
+                </div>
+                <button id="reset-btn" class="btn btn-danger"><i class="fas fa-redo"></i> 重置</button>
+
+                <div class="tip-box">
+                    <p><i class="fas fa-info-circle"></i> 提示：双击网络区域可重置大小，右下角可拖动调整大小</p>
+                </div>
+            </div>
+        </div>
+        
+        <!-- 中间可视化区域 -->
+        <div class="main-content">
+            <div id="network-container">
+                <div id="central-node" class="node central">
+                    <div class="node-title"><i class="fas fa-server"></i> 中心节点</div>
+                    <div class="node-content">
+                        <div class="node-status">待机中</div>
+                    </div>
+                </div>
+                <div id="nodes-container"></div>
+            </div>
+        </div>
+        
+        <!-- 右侧训练状态区域 -->
+        <div class="status-sidebar">
+            <div class="training-status-panel">
+                <h3>训练状态</h3>
+                <div id="status-display" class="status-box">
+                    <p>等待开始训练...</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 节点模板 (隐藏) -->
+    <template id="node-template">
+        <div class="node client-node">
+            <div class="node-header">
+                <span class="node-title"><i class="fas fa-laptop"></i> 节点</span>
+                <button class="node-remove-btn">×</button>
+            </div>
+            <div class="node-content">
+                <div class="node-status">待机中</div>
+                <div class="image-upload">
+                    <label for="image-input">
+                        <div class="upload-placeholder">
+                            <span>点击上传图片数据</span>
+                        </div>
+                    </label>
+                    <input type="file" id="image-input" accept="image/*" multiple class="image-input" />
+                </div>
+                <div class="uploaded-info">
+                    <span class="uploaded-count">0</span> 张图片
+                </div>
+            </div>
+        </div>
+    </template>
+    
+    <div id="message-log" class="message-log">
+        <div class="message-log-header">
+            <h3>训练日志</h3>
+            <button id="clear-log-btn" class="btn btn-small"><i class="fas fa-trash-alt"></i> 清除</button>
+        </div>
+        <div id="log-content"></div>
+    </div>
+
+    <script src="main.js"></script>
+    <script src="federated-learning.js"></script>
+</body>
+</html>
