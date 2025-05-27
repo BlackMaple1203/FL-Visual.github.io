@@ -46,16 +46,43 @@ header {
     border: 2px solid rgba(255, 255, 255, 0.3);
     color: white;
     border-radius: 50%;
-    width: 45px;
-    height: 45px;
+    width: 60px;
+    height: 60px;
     display: flex;
     align-items: center;
     justify-content: center;
     cursor: pointer;
-    font-size: 1.2rem;
+    font-size: 1.6rem;
     transition: all 0.3s ease;
     backdrop-filter: blur(10px);
     z-index: 100;
+}
+
+/* 介绍按钮样式 */
+.intro-button {
+    position: absolute;
+    top: 1rem;
+    left: 2rem;
+    background: rgba(255, 255, 255, 0.2);
+    border: 2px solid rgba(255, 255, 255, 0.3);
+    color: white;
+    border-radius: 50%;
+    width: 60px;
+    height: 60px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    font-size: 1.6rem;
+    transition: all 0.3s ease;
+    backdrop-filter: blur(10px);
+    z-index: 100;
+}
+
+.intro-button:hover {
+    background: rgba(255, 255, 255, 0.3);
+    border-color: rgba(255, 255, 255, 0.5);
+    transform: scale(1.1);
 }
 
 .help-button:hover {
@@ -235,30 +262,30 @@ header {
     display: flex;
     max-width: 1400px;
     margin: 0 auto;
-    padding: 2rem; /* 从1.5rem增加到2rem */
+    padding: 2rem;
     align-items: flex-start;
-    gap: 2rem; /* 从1.5rem增加到2rem */
+    gap: 3rem; /* 从2rem增加到3rem，增大间距 */
 }
 
 .sidebar {
-    width: 300px; /* 从280px增加到300px */
+    width: 320px; /* 从300px增加到320px */
     flex-shrink: 0;
     position: sticky;
-    top: 2rem; /* 从1.5rem增加到2rem */
+    top: 2rem;
 }
 
 .main-content {
-    flex: 1; /* 占用剩余空间 */
-    min-width: 0; /* 允许在必要时缩小 */
-    min-height: 600px;
-    overflow: visible; /* 允许内容溢出 */
+    flex: 1;
+    min-width: 0;
+    min-height: 700px; /* 从600px增加到700px */
+    overflow: visible;
 }
 
 .status-sidebar {
-    width: 300px; /* 从280px增加到300px */
+    width: 320px; /* 从300px增加到320px */
     flex-shrink: 0;
     position: sticky;
-    top: 2rem; /* 从1.5rem增加到2rem */
+    top: 2rem;
 }
 
 .control-panel {
@@ -502,22 +529,30 @@ header {
     resize: both; /* 使容器可调整大小 */
     min-height: 400px;
     min-width: 300px; /* 减小最小宽度 */
-    max-width: 100%;
-    max-height: 800px;
+    max-width: 1600px; /* 从1200px增加到1600px */
+    max-height: 1200px; /* 从900px增加到1200px */
     margin: 0 auto; /* 居中显示 */
 }
 
 /* 添加调整大小的手柄样式 */
 #network-container::after {
-    content: "";
+    content: '';
     position: absolute;
     bottom: 0;
     right: 0;
-    width: 20px;
-    height: 20px;
-    background-image: linear-gradient(135deg, transparent 50%, var(--accent-color) 50%);
-    cursor: nwse-resize;
-    z-index: 10;
+    width: 25px; /* 从20px增加到25px */
+    height: 25px; /* 从20px增加到25px */
+    background: linear-gradient(-45deg, transparent 30%, var(--primary-color) 30%, var(--primary-color) 70%, transparent 70%);
+    cursor: se-resize;
+    border-radius: 0 0 8px 0;
+    opacity: 0.8;
+    transition: all 0.3s ease;
+}
+
+#network-container:hover::after {
+    background: linear-gradient(-45deg, transparent 30%, var(--accent-color) 30%, var(--accent-color) 70%, transparent 70%);
+    opacity: 1;
+    transform: scale(1.1);
 }
 
 #central-node {
@@ -963,9 +998,54 @@ header {
     transition: all 0.2s ease;
 }
 
-#status-display p:last-child {
-    border-left-color: var(--accent-color);
-    font-weight: 500;
+/* 日志按钮组样式 */
+.log-buttons {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+}
+
+/* 日志放大模态框样式 */
+.log-modal .modal {
+    width: 90vw;
+    height: 85vh;
+    max-width: none;
+    max-height: none;
+}
+
+.log-modal-content {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+}
+
+.log-modal-body {
+    flex: 1;
+    overflow: hidden;
+    padding: 0;
+}
+
+#log-modal-content {
+    height: 100%;
+    overflow-y: auto;
+    background: #f8f9fa;
+    border-radius: 8px;
+    padding: 1rem;
+    font-family: 'Courier New', monospace;
+    font-size: 0.9rem;
+    line-height: 1.5;
+}
+
+#log-modal-content .log-entry {
+    margin-bottom: 0.5rem;
+    padding: 0.3rem 0;
+    border-bottom: 1px solid rgba(0,0,0,0.1);
+}
+
+#log-modal-content .log-timestamp {
+    color: #666;
+    margin-right: 0.5rem;
+    font-weight: bold;
 }
 
 /* 网络容器大小调整 */
@@ -993,5 +1073,18 @@ header {
     
     #network-container {
         height: 500px;
+    }
+}
+
+/* 日志放大模态框响应式调整 */
+@media (max-width: 768px) {
+    #log-modal-content {
+        padding: 0.5rem;
+        font-size: 0.85rem;
+    }
+    
+    #log-modal-content .log-entry {
+        margin-bottom: 0.3rem;
+        padding: 0.2rem 0;
     }
 }

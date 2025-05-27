@@ -15,6 +15,11 @@
         </button>
     </header>
 
+    <!-- 介绍按钮 -->
+    <button class="intro-button" id="intro-btn" title="系统介绍">
+        <i class="fas fa-info"></i>
+    </button>
+
     <div class="container">
         <!-- 左侧控制面板 -->
         <div class="sidebar">
@@ -107,10 +112,12 @@
             </div>
         </div>
     </template>
-      <div id="message-log" class="message-log">
-        <div class="message-log-header">
+      <div id="message-log" class="message-log">        <div class="message-log-header">
             <h3>训练日志</h3>
-            <button id="clear-log-btn" class="btn btn-small"><i class="fas fa-trash-alt"></i> 清除</button>
+            <div class="log-buttons">
+                <button id="magnify-log-btn" class="btn btn-small" title="放大显示"><i class="fas fa-expand"></i></button>
+                <button id="clear-log-btn" class="btn btn-small"><i class="fas fa-trash-alt"></i> 清除</button>
+            </div>
         </div>
         <div id="log-content"></div>
     </div>
@@ -170,9 +177,7 @@
                 </div>
             </div>
         </div>
-    </div>
-
-    <!-- 错误提示弹窗 -->
+    </div>    <!-- 错误提示弹窗 -->
     <div id="error-modal" class="modal-overlay error-modal">
         <div class="modal">
             <div class="modal-header">
@@ -181,6 +186,74 @@
             </div>
             <div class="modal-content">
                 <p id="error-message"></p>
+            </div>
+        </div>
+    </div>
+
+    <!-- 系统介绍弹窗 -->
+    <div id="intro-modal" class="modal-overlay">
+        <div class="modal">
+            <div class="modal-header">
+                <h2 class="modal-title"><i class="fas fa-info-circle"></i> 系统介绍</h2>
+                <button class="modal-close" id="intro-close-btn">&times;</button>
+            </div>            <div class="modal-content">
+                <h3>🏥 医联济邦：区块链赋能下的联邦医学影像协同诊断系统</h3>
+                <p>本系统是一种结合联邦学习与区块链技术的分布式医学影像诊断系统，旨在在保护患者隐私的前提下，提升医疗影像诊断的准确性与协同效率，解决传统医疗系统中的数据孤岛、隐私保护与资源不均等问题。</p>
+                
+                <h3>🎯 系统目标</h3>
+                <ul>
+                    <li><strong>提升诊断智能化水平：</strong>克服人工判断主导的低效模式，减少因医生疲劳导致的漏诊问题，利用AI技术提升对复杂病灶（如早期肿瘤、微小钙化灶等）的识别率与诊断准确性</li>
+                    <li><strong>打破数据孤岛，实现跨机构协作：</strong>融合多家医院的异构影像数据资源，通过联邦学习实现模型协同训练而不交换原始数据</li>
+                    <li><strong>加强数据隐私与安全保护：</strong>采用联邦学习、差分隐私、同态加密和区块链技术，保障患者数据在使用过程中的私密性与可追溯性</li>
+                    <li><strong>推动医疗资源均衡化：</strong>支持边远或资源有限地区接入先进AI诊断模型，降低高质量医疗资源的不均衡带来的服务落差</li>
+                </ul>
+
+                <h3>🚀 核心功能</h3>
+                <div class="feature-list">
+                    <ul>
+                        <li><strong>分布式协同训练：</strong>医院本地训练模型，仅上传模型参数，不传输原始数据，支持异步更新与周期性同步机制</li>
+                        <li><strong>多重隐私保护机制：</strong>差分隐私、同态加密、区块链溯源，全方位保障数据安全</li>
+                        <li><strong>智能合约自动管理：</strong>注册客户端、验证身份、任务分配与激励发放全流程自动执行</li>
+                    </ul>
+                </div>
+
+                <h3>💡 技术创新点</h3>
+                <ul>
+                    <li><strong>联邦学习与区块链深度融合：</strong>将模型更新与参数同步过程上链，利用智能合约记录操作、参与机构与更新内容</li>
+                    <li><strong>面向多机构的数据协同：</strong>在不泄露原始数据的前提下实现跨医院协同建模，保证隐私合规的同时提升模型泛化能力</li>
+                    <li><strong>高适应性的加密体系：</strong>差分隐私 + 同态加密 + 区块链的组合设计，防止数据泄露、模型推断与操作审计等潜在攻击路径</li>
+                    <li><strong>支持异构数据与多病种识别：</strong>支持X光、CT、MRI等不同影像类型，具备模型自适应机制</li>
+                </ul>
+
+                <h3>🎨 适用范围与推广前景</h3>
+                <ul>
+                    <li><strong>目标用户：</strong>各级医疗机构、远程诊断平台、影像中心</li>
+                    <li><strong>适配场景：</strong>肺结节筛查、乳腺癌识别、阿尔茨海默病早筛等</li>
+                    <li><strong>市场潜力：</strong>面向全球医疗AI和分布式协作市场，具有广阔商业化应用前景</li>
+                </ul>
+
+                <h3>✨ 预期成果与影响</h3>
+                <div class="feature-list">
+                    <ul>
+                        <li><strong>准确性提升：</strong>模型敏感度优于传统人工诊断</li>
+                        <li><strong>隐私安全保障：</strong>满足GDPR、HIPAA等国际法规</li>
+                        <li><strong>协作网络构建：</strong>构建医院联盟，打破信息孤岛</li>
+                        <li><strong>经济社会效益：</strong>推动智能医疗落地，促进医疗公平化发展</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 日志放大弹窗 -->
+    <div id="log-modal" class="modal-overlay log-modal">
+        <div class="modal log-modal-content">
+            <div class="modal-header">
+                <h2 class="modal-title"><i class="fas fa-list-alt"></i> 训练日志详情</h2>
+                <button class="modal-close" id="log-close-btn">&times;</button>
+            </div>
+            <div class="modal-content log-modal-body">
+                <div id="log-modal-content"></div>
             </div>
         </div>
     </div>

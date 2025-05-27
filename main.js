@@ -10,14 +10,22 @@ document.addEventListener('DOMContentLoaded', () => {    // DOM元素引用
     const logContent = document.getElementById('log-content');
     const nodeTemplate = document.getElementById('node-template');
     const networkContainer = document.getElementById('network-container');
-    
-    // 弹窗相关元素
+      // 弹窗相关元素
     const helpBtn = document.getElementById('help-btn');
     const helpModal = document.getElementById('help-modal');
     const helpCloseBtn = document.getElementById('help-close-btn');
     const errorModal = document.getElementById('error-modal');
     const errorCloseBtn = document.getElementById('error-close-btn');
     const errorMessage = document.getElementById('error-message');
+    
+    // 新增的弹窗元素
+    const introBtn = document.getElementById('intro-btn');
+    const introModal = document.getElementById('intro-modal');
+    const introCloseBtn = document.getElementById('intro-close-btn');
+    const magnifyLogBtn = document.getElementById('magnify-log-btn');
+    const logModal = document.getElementById('log-modal');
+    const logCloseBtn = document.getElementById('log-close-btn');
+    const logModalContent = document.getElementById('log-modal-content');
     
     // 训练参数控制
     const roundNumber = document.getElementById('round-number');
@@ -384,11 +392,21 @@ document.addEventListener('DOMContentLoaded', () => {    // DOM元素引用
     });    // 清除日志
     clearLogBtn.addEventListener('click', () => {
         logContent.innerHTML = '';
-    });
-
-    // 帮助按钮事件
+    });    // 帮助按钮事件
     helpBtn.addEventListener('click', () => {
         helpModal.classList.add('show');
+    });
+
+    // 介绍按钮事件
+    introBtn.addEventListener('click', () => {
+        introModal.classList.add('show');
+    });
+
+    // 日志放大按钮事件
+    magnifyLogBtn.addEventListener('click', () => {
+        // 复制当前日志内容到放大模态框
+        logModalContent.innerHTML = logContent.innerHTML;
+        logModal.classList.add('show');
     });
 
     // 关闭帮助弹窗
@@ -396,15 +414,35 @@ document.addEventListener('DOMContentLoaded', () => {    // DOM元素引用
         helpModal.classList.remove('show');
     });
 
+    // 关闭介绍弹窗
+    introCloseBtn.addEventListener('click', () => {
+        introModal.classList.remove('show');
+    });
+
+    // 关闭日志放大弹窗
+    logCloseBtn.addEventListener('click', () => {
+        logModal.classList.remove('show');
+    });
+
     // 关闭错误弹窗
     errorCloseBtn.addEventListener('click', () => {
         errorModal.classList.remove('show');
-    });
-
-    // 点击弹窗背景关闭
+    });    // 点击弹窗背景关闭
     helpModal.addEventListener('click', (e) => {
         if (e.target === helpModal) {
             helpModal.classList.remove('show');
+        }
+    });
+
+    introModal.addEventListener('click', (e) => {
+        if (e.target === introModal) {
+            introModal.classList.remove('show');
+        }
+    });
+
+    logModal.addEventListener('click', (e) => {
+        if (e.target === logModal) {
+            logModal.classList.remove('show');
         }
     });
 
@@ -412,12 +450,12 @@ document.addEventListener('DOMContentLoaded', () => {    // DOM元素引用
         if (e.target === errorModal) {
             errorModal.classList.remove('show');
         }
-    });
-
-    // ESC键关闭弹窗
+    });    // ESC键关闭弹窗
     document.addEventListener('keydown', (e) => {
         if (e.key === 'Escape') {
             helpModal.classList.remove('show');
+            introModal.classList.remove('show');
+            logModal.classList.remove('show');
             errorModal.classList.remove('show');
         }
     });
