@@ -10,7 +10,6 @@
 
 {% block content %}
 <header>
-    <h1><i class="fas fa-network-wired"></i> 联邦学习可视化演示系统</h1>
     <button class="help-button" id="help-btn" title="帮助">
         <i class="fas fa-question"></i>
     </button>
@@ -23,30 +22,34 @@
 
 <div class="container">
     <!-- 左侧控制面板 -->
-    <div class="sidebar">
-        <div class="control-panel">
-            <h2>控制面板</h2>
-            <button id="add-node-btn" class="btn">添加节点</button>
+    <div class="sidebar">        <div class="control-panel">
+            <h2>控制面板</h2>            <div class="add-node-section">
+                <label for="client-id-input">通过客户端ID添加节点:</label>
+                <div class="input-with-button">
+                    <input type="text" id="client-id-input" placeholder="例: CLIENT_A1B2C3D4" maxlength="16" pattern="CLIENT_[A-Z0-9]{8}">
+                    <button id="add-node-btn" class="btn">添加节点</button>
+                </div>
+                <div class="param-hint">请输入有效的客户端ID格式</div>
+            </div>
             
             <div class="training-params">
-                <h3>训练参数</h3>
-                <div class="param-group">
-                    <label for="round-number">训练轮数:</label>
+                <h3>训练参数</h3>                <div class="param-group">
+                    <label for="rounds-value">训练轮数:</label>
                     <div class="input-with-buttons">
                         <button class="btn-small btn-adjust" id="round-minus"><i class="fas fa-minus"></i></button>
-                        <input type="number" id="round-number" value="3" min="1" max="10">
+                        <span id="rounds-value" class="param-value">3</span>
                         <button class="btn-small btn-adjust" id="round-plus"><i class="fas fa-plus"></i></button>
                     </div>
                 </div>
                 
                 <div class="param-group">
-                    <label for="client-number">每轮参与客户端数:</label>
+                    <label for="clients-value">每轮参与客户端数:</label>
                     <div class="input-with-buttons">
                         <button class="btn-small btn-adjust" id="client-minus"><i class="fas fa-minus"></i></button>
-                        <input type="number" id="client-number" value="0" min="0" max="8">
+                        <span id="clients-value" class="param-value">1</span>
                         <button class="btn-small btn-adjust" id="client-plus"><i class="fas fa-plus"></i></button>
                     </div>
-                    <div class="param-hint">0表示全部参与</div>
+                    <div class="param-hint">最大值由已添加节点数决定</div>
                 </div>
             </div>            <div class="training-controls">
                 <button id="start-training-btn" class="btn btn-primary"><i class="fas fa-play"></i> 开始训练</button>
@@ -64,10 +67,11 @@
     </div>
     
     <!-- 中间可视化区域 -->
-    <div class="main-content">
-        <div id="network-container">
-            <div id="central-node" class="node central">
-                <div class="node-title"><i class="fas fa-server"></i> 中心节点</div>
+    <div class="main-content">        <div id="network-container">
+            <div id="central-node" class="node central-node">
+                <div class="node-header">
+                    <span class="node-title"><i class="fas fa-server"></i> 中心服务器</span>
+                </div>
                 <div class="node-content">
                     <div class="node-status">待机中</div>
                 </div>
@@ -75,13 +79,33 @@
             <div id="nodes-container"></div>
         </div>
     </div>
-    
-    <!-- 右侧训练状态区域 -->
+      <!-- 右侧训练状态区域 -->
     <div class="status-sidebar">
         <div class="training-status-panel">
             <h3>训练状态</h3>
             <div id="status-display" class="status-box">
                 <p>等待开始训练...</p>
+            </div>
+        </div>
+        
+        <!-- 客户端状态监控 -->
+        <div class="client-status-panel">
+            <h3>客户端状态</h3>
+            <div id="client-status-list" class="client-status-list">
+                <!-- 动态添加客户端状态 -->
+            </div>
+        </div>
+        
+        <!-- 服务器日志 -->
+        <div class="server-logs-panel">
+            <h3>服务器日志</h3>
+            <div class="log-controls">
+                <button id="clear-server-logs" class="btn btn-small">
+                    <i class="fas fa-trash"></i> 清除
+                </button>
+            </div>
+            <div id="server-logs-content" class="logs-content">
+                <!-- 动态添加日志条目 -->
             </div>
         </div>
     </div>
@@ -267,6 +291,89 @@
 {% endblock %}
 
 {% block extra_js %}
+<!-- SocketIO CDN -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js"></script>
 <script src="{{ url_for('static', filename='js/main.js') }}"></script>
-<script src="{{ url_for('static', filename='js/federated.js') }}"></script>
+<script src="{{ url_for('static', filename='js/server.js') }}"></script>
+<!-- 初始化SocketIO连接 -->
+<script>
+// 初始化SocketIO连接
+const socket = io();
+const userType = 'server'; // 服务器端
+const userName = '{{ current_user.username }}';
+
+// 注册为服务器端客户端
+socket.emit('register_client', {
+    type: userType,
+    name: userName
+});
+
+// 监听注册确认
+socket.on('registration_confirmed', (data) => {
+    console.log('服务器端注册成功:', data);
+    addLogEntry('系统', '服务器端连接成功');
+});
+
+// 监听客户端连接
+socket.on('client_connected', (data) => {
+    console.log('新客户端连接:', data);
+    addLogEntry('系统', `客户端 ${data.client_name} 已连接`);
+    updateConnectedClientsDisplay();
+});
+
+// 监听客户端断开连接
+socket.on('client_disconnected', (data) => {
+    console.log('客户端断开连接:', data);
+    addLogEntry('系统', `客户端 ${data.client_name} 已断开连接`);
+    updateConnectedClientsDisplay();
+});
+
+// 监听训练开始确认
+socket.on('training_started', (data) => {
+    console.log('训练已开始:', data);
+    addLogEntry('系统', `联邦学习训练已开始，${data.participating_clients} 个客户端参与，总轮数: ${data.rounds}`);
+    addLogEntry('系统', `参与的客户端: ${data.client_list.join(', ')}`);
+});
+
+// 监听客户端完成训练轮次
+socket.on('client_round_complete', (data) => {
+    console.log('客户端完成训练轮次:', data);
+    addLogEntry('训练', `客户端 ${data.client_name} 完成第 ${data.round} 轮训练 - Loss: ${data.loss.toFixed(4)}, Accuracy: ${(data.accuracy * 100).toFixed(2)}%`);
+});
+
+// 监听节点状态更新
+socket.on('node_status_updated', (data) => {
+    console.log('节点状态更新:', data);
+    addLogEntry('状态', `节点 ${data.node_id}: ${data.status} - ${data.message}`);
+});
+
+// 更新已连接客户端显示
+function updateConnectedClientsDisplay() {
+    socket.emit('get_connected_clients');
+}
+
+socket.on('connected_clients_list', (data) => {
+    const statusDisplay = document.getElementById('status-display');
+    if (statusDisplay) {
+        statusDisplay.innerHTML = `
+            <div class="status-item">
+                <span class="status-label">已连接客户端:</span>
+                <span class="status-value">${data.total}</span>
+            </div>
+            <div class="clients-list">
+                ${data.clients.map(client => 
+                    `<div class="client-item">
+                        <i class="fas fa-circle text-success"></i>
+                        ${client.name}
+                        <small>(${new Date(client.connected_at).toLocaleTimeString()})</small>
+                    </div>`
+                ).join('')}
+            </div>
+        `;
+    }
+});
+
+// 将socket对象暴露给其他脚本使用
+window.flSocket = socket;
+</script>
 {% endblock %}

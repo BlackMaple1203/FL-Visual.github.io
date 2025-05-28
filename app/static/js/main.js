@@ -49,19 +49,90 @@ document.addEventListener('DOMContentLoaded', () => {    // DOM元素引用
     let nodeStartY = 0;
     let containerRect = null;
     let nodeRect = null;
-    let rafId = null;
-
-    // 添加节点
+    let rafId = null;    // 添加节点 - 通过客户端ID
     addNodeBtn.addEventListener('click', () => {
+        const clientIdInput = document.getElementById('client-id-input');
+        const clientId = clientIdInput.value.trim();
+        
+        if (!clientId) {
+            addLogMessage('请输入客户端ID', 'warning');
+            return;
+        }
+        
         if (nodes.length >= 8) {
             addLogMessage('已达到最大节点数量限制 (8)', 'warning');
             return;
         }
         
-        createNode();
-    });
+        // 验证客户端ID格式
+        if (!clientId.match(/^CLIENT_[A-Z0-9]{8}$/)) {
+            addLogMessage('客户端ID格式无效，应为: CLIENT_XXXXXXXX', 'error');
+            return;
+        }
+        
+        // 检查是否已存在
+        const existingNode = nodes.find(node => node.clientId === clientId);
+        if (existingNode) {
+            addLogMessage(`客户端 ${clientId} 已存在`, 'warning');
+            return;
+        }
+        
+        createNodeWithClientId(clientId);
+        clientIdInput.value = ''; // 清空输入框
+    });    // 创建带有客户端ID的新节点
+    function createNodeWithClientId(clientId) {
+        const nodeId = nodeIdCounter++;
+        
+        // 从模板克隆节点
+        const nodeFragment = document.importNode(nodeTemplate.content, true);
+        const nodeElement = nodeFragment.querySelector('.node');
+        
+        // 设置节点ID和标题
+        nodeElement.id = `node-${nodeId}`;
+        nodeElement.querySelector('.node-title').textContent = clientId;
+        
+        // 设置上传输入框ID
+        const imageInput = nodeElement.querySelector('.image-input');
+        imageInput.id = `image-input-${nodeId}`;
+        nodeElement.querySelector('label').setAttribute('for', `image-input-${nodeId}`);
+        
+        // 定位节点 - 在圆周上均匀分布
+        positionNode(nodeElement, nodeId);
+        
+        // 添加到DOM
+        nodesContainer.appendChild(nodeElement);
+        
+        // 存储节点数据
+        const nodeData = {
+            id: nodeId,
+            clientId: clientId,
+            element: nodeElement,
+            images: [],
+            status: 'idle',  // idle, training, uploading, complete
+        };
+        nodes.push(nodeData);
+        
+        // 绑定事件
+        setupNodeEvents(nodeId);
+        
+        // 添加日志
+        addLogMessage(`客户端 ${clientId} 已添加到网络`);
+        
+        // 更新客户端状态面板
+        updateClientStatusPanel();
+        
+        // 通知服务器新节点添加
+        if (window.flSocket) {
+            window.flSocket.emit('node_added', {
+                node_id: nodeId,
+                client_id: clientId
+            });
+        }
+        
+        return nodeId;
+    }
 
-    // 创建新节点
+    // 创建新节点 (旧版本，保持兼容性)
     function createNode() {
         const nodeId = nodeIdCounter++;
         
@@ -348,7 +419,15 @@ document.addEventListener('DOMContentLoaded', () => {    // DOM元素引用
         // 添加日志
         addLogMessage(`联邦学习训练开始，总轮数: ${rounds}, 每轮参与客户端: ${clientCount > 0 ? clientCount : '全部'}`, 'highlight');
         
-        // 开始模拟训练
+        // 通过SocketIO通知开始训练
+        if (window.flSocket) {
+            window.flSocket.emit('start_training', {
+                rounds: rounds,
+                client_count: clientCount
+            });
+        }
+        
+        // 开始模拟训练（本地可视化）
         startFederatedLearning(rounds, clientCount);
     });
     
@@ -469,9 +548,7 @@ document.addEventListener('DOMContentLoaded', () => {    // DOM元素引用
     // 根据ID获取节点对象
     function getNodeById(id) {
         return nodes.find(n => n.id === id);
-    }
-
-    // 添加日志消息
+    }    // 添加日志消息
     function addLogMessage(message, type = 'info') {
         const timestamp = new Date().toLocaleTimeString();
         const logEntry = document.createElement('div');
@@ -487,6 +564,11 @@ document.addEventListener('DOMContentLoaded', () => {    // DOM元素引用
         logContent.appendChild(logEntry);
         logContent.scrollTop = logContent.scrollHeight;
     }
+
+    // 公开addLogEntry函数供外部调用
+    window.addLogEntry = function(type, message) {
+        addLogMessage(`[${type}] ${message}`, 'info');
+    };
 
     // 创建默认节点
     for (let i = 0; i < 4; i++) {
@@ -613,6 +695,89 @@ document.addEventListener('DOMContentLoaded', () => {    // DOM元素引用
         addNodeBtn.disabled = false;
         
         // 不自动添加"训练完成"日志，由调用方决定是否添加
+    }
+
+    // 更新客户端状态面板
+    function updateClientStatusPanel() {
+        const statusList = document.getElementById('client-status-list');
+        if (!statusList) return;
+
+        if (nodes.length === 0) {
+            statusList.innerHTML = '<p class="text-muted text-center">暂无客户端连接</p>';
+            return;
+        }
+
+        statusList.innerHTML = nodes.map(node => `
+            <div class="client-status-item">
+                <div class="client-info">
+                    <div class="client-id">${node.clientId || `节点${node.id}`}</div>
+                    <div class="client-data">${node.images.length} 个数据文件</div>
+                </div>
+                <span class="client-state ${getClientStateClass(node.status)}">
+                    ${getClientStateText(node.status)}
+                </span>
+            </div>
+        `).join('');
+    }
+
+    // 获取客户端状态样式类
+    function getClientStateClass(status) {
+        const stateClasses = {
+            'idle': 'online',
+            'training': 'training',
+            'uploading': 'training',
+            'complete': 'online',
+            'offline': 'offline'
+        };
+        return stateClasses[status] || 'offline';
+    }
+
+    // 获取客户端状态文本
+    function getClientStateText(status) {
+        const stateTexts = {
+            'idle': '在线',
+            'training': '训练中',
+            'uploading': '上传中',
+            'complete': '完成',
+            'offline': '离线'
+        };
+        return stateTexts[status] || '未知';
+    }
+
+    // 添加服务器日志
+    function addServerLog(message, type = 'info') {
+        const logsContent = document.getElementById('server-logs-content');
+        if (!logsContent) return;
+
+        const timestamp = new Date().toLocaleTimeString();
+        const logEntry = document.createElement('div');
+        logEntry.className = 'log-entry';
+        logEntry.innerHTML = `
+            <span class="log-timestamp">[${timestamp}]</span>
+            <span class="log-type">[${type.toUpperCase()}]</span>
+            <span class="log-message">${message}</span>
+        `;
+
+        logsContent.appendChild(logEntry);
+        logsContent.scrollTop = logsContent.scrollHeight;
+
+        // 限制日志条目数量
+        const logEntries = logsContent.querySelectorAll('.log-entry');
+        if (logEntries.length > 100) {
+            logEntries[0].remove();
+        }
+    }
+
+    // 清除服务器日志
+    const clearServerLogsBtn = document.getElementById('clear-server-logs');
+    if (clearServerLogsBtn) {
+        clearServerLogsBtn.addEventListener('click', () => {
+            const logsContent = document.getElementById('server-logs-content');
+            if (logsContent) {
+                logsContent.innerHTML = '';
+                addServerLog('服务器日志已清除', 'info');
+            }
+        });
     }
 
     // 设置中心节点的拖拽功能
@@ -751,4 +916,120 @@ document.addEventListener('DOMContentLoaded', () => {    // DOM元素引用
         // 添加日志记录
         addLogMessage("网络显示区域大小已调整，节点位置已重新校准");
     }
+    
+    // 初始化Socket连接和事件监听
+    function initializeSocketListeners() {
+        if (!window.flSocket) return;
+
+        // 监听客户端参数更新
+        window.flSocket.on('client_parameters_updated', (data) => {
+            addServerLog(`客户端 ${data.client_id} 更新了模型参数`, 'info');
+            updateClientStatusPanel();
+        });
+
+        // 监听客户端数据状态更新
+        window.flSocket.on('client_data_status_updated', (data) => {
+            addServerLog(`客户端 ${data.client_id} 上传了 ${data.file_count} 个数据文件`, 'info');
+            updateClientStatusPanel();
+        });
+
+        // 监听训练状态更新
+        window.flSocket.on('training_status_updated', (data) => {
+            addServerLog(data.message, 'info');
+            updateClientStatusInNodes(data.client_id, data.status);
+            updateClientStatusPanel();
+        });
+
+        // 监听节点状态更新
+        window.flSocket.on('node_status_updated', (data) => {
+            addServerLog(`节点 ${data.node_id} (${data.client_id}) 状态: ${data.status}`, 'info');
+            updateClientStatusPanel();
+        });
+
+        // 定期请求状态更新
+        setInterval(() => {
+            window.flSocket.emit('get_client_status');
+            window.flSocket.emit('get_server_logs');
+        }, 10000); // 每10秒更新一次
+
+        // 监听状态响应
+        window.flSocket.on('client_status_list', (data) => {
+            updateClientStatusPanelWithData(data.clients);
+        });
+
+        window.flSocket.on('server_logs_list', (data) => {
+            updateServerLogsWithData(data.logs);
+        });
+    }
+
+    // 更新节点中的客户端状态显示
+    function updateClientStatusInNodes(clientId, status) {
+        const node = nodes.find(n => n.clientId === clientId);
+        if (node) {
+            node.status = status;
+            const statusElement = node.element.querySelector('.node-status');
+            if (statusElement) {
+                statusElement.textContent = getClientStateText(status);
+                
+                // 更新节点样式
+                node.element.className = node.element.className.replace(/\b(training|uploading|complete)\b/g, '');
+                if (status === 'training') {
+                    node.element.classList.add('training');
+                } else if (status === 'uploading') {
+                    node.element.classList.add('uploading');
+                } else if (status === 'complete') {
+                    node.element.classList.add('complete');
+                }
+            }
+        }
+    }
+
+    // 使用数据更新客户端状态面板
+    function updateClientStatusPanelWithData(clients) {
+        const statusList = document.getElementById('client-status-list');
+        if (!statusList) return;
+
+        if (clients.length === 0) {
+            statusList.innerHTML = '<p class="text-muted text-center">暂无客户端连接</p>';
+            return;
+        }
+
+        statusList.innerHTML = clients.map(client => `
+            <div class="client-status-item">
+                <div class="client-info">
+                    <div class="client-id">${client.client_id}</div>
+                    <div class="client-data">
+                        数据: ${client.has_uploaded_data ? '已上传' : '未上传'} 
+                        ${client.training_progress ? `(${client.training_progress})` : ''}
+                    </div>
+                </div>
+                <span class="client-state ${getClientStateClass(client.status)}">
+                    ${client.is_training ? '训练中' : getClientStateText(client.status)}
+                </span>
+            </div>
+        `).join('');
+    }
+
+    // 使用数据更新服务器日志
+    function updateServerLogsWithData(logs) {
+        const logsContent = document.getElementById('server-logs-content');
+        if (!logsContent) return;
+
+        logsContent.innerHTML = logs.map(log => `
+            <div class="log-entry">
+                <span class="log-timestamp">[${new Date(log.created_at).toLocaleTimeString()}]</span>
+                <span class="log-type">[${log.event_type}]</span>
+                <span class="log-message">${log.message}</span>
+            </div>
+        `).join('');
+    }
+
+    // 页面加载时初始化
+    document.addEventListener('DOMContentLoaded', () => {
+        // 等待Socket连接建立
+        setTimeout(() => {
+            initializeSocketListeners();
+            addServerLog('服务器控制台已启动', 'info');
+        }, 1000);
+    });
 });

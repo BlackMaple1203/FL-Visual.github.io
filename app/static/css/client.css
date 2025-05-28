@@ -1088,3 +1088,74 @@ header {
         padding: 0.2rem 0;
     }
 }
+
+/* 客户端仪表板样式 */
+.client-dashboard {
+    padding: 2rem;
+}
+
+.dashboard-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 2rem;
+    padding: 1rem;
+    background: white;
+    border-radius: var(--border-radius);
+    box-shadow: var(--box-shadow);
+    position: relative;
+}
+
+/* 客户端ID显示样式 */
+.client-id-display {
+    position: absolute;
+    top: 1rem;
+    left: 1rem;
+    background: linear-gradient(135deg, var(--primary-color), var(--accent-color));
+    color: white;
+    padding: 0.5rem 1rem;
+    border-radius: var(--border-radius);
+    font-size: 0.9rem;
+    font-weight: 500;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+}
+
+.client-id-label {
+    opacity: 0.9;
+    margin-right: 0.5rem;
+}
+
+.client-id-value {
+    font-weight: 700;
+    letter-spacing: 1px;
+}
+
+.dashboard-header h1 {
+    flex: 1;
+    text-align: center;
+    margin: 0;
+    color: var(--primary-color);
+    font-size: 2rem;
+    font-weight: 600;
+}
+
+.client-status {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.status-indicator {
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    background: var(--success-color);
+    animation: pulse 2s infinite;
+}
+
+/* 连接状态动画 */
+@keyframes pulse {
+    0% { opacity: 1; }
+    50% { opacity: 0.5; }
+    100% { opacity: 1; }
+}

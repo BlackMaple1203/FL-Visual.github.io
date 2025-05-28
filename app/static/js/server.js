@@ -1,119 +1,289 @@
 // 服务器端仪表板JavaScript
 
-class ServerDashboard {
-    constructor() {
+class ServerDashboard {    constructor() {
         this.connectedClients = [];
-        this.globalLossChart = null;
+        this.nodes = new Map(); // 存储添加的节点
         this.trainingInProgress = false;
         this.currentRound = 0;
         this.totalRounds = 3;
-        this.participatingClients = 0;
+        this.participatingClients = 1;
+        this.socket = null;
         
         this.init();
     }
     
     init() {
+        this.initializeSocket();
         this.setupEventListeners();
-        this.initGlobalLossChart();
-        this.loadConnectedClients();
-        this.addLogEntry('服务器已启动，等待客户端连接...', 'info');
+        this.loadNodes();
+        this.loadServerLogs();
+        this.updateClientStatus();
+        this.addLogEntry('服务器已启动，等待添加节点...', 'info');
+        
+        // 定期更新状态
+        setInterval(() => {
+            this.updateClientStatus();
+            this.loadServerLogs();
+        }, 5000);
+    }
+    
+    // 初始化SocketIO连接
+    initializeSocket() {
+        if (window.flSocket) {
+            this.socket = window.flSocket;
+            this.setupSocketListeners();
+        }
+    }
+    
+    // 设置Socket事件监听器
+    setupSocketListeners() {
+        if (!this.socket) return;
+        
+        this.socket.on('connect', () => {
+            this.addLogEntry('SocketIO连接已建立', 'info');
+        });
+        
+        this.socket.on('disconnect', () => {
+            this.addLogEntry('SocketIO连接已断开', 'warning');
+        });
     }
     
     setupEventListeners() {
-        // 训练控制按钮
-        document.getElementById('start-training-btn').addEventListener('click', () => {
-            this.startGlobalTraining();
-        });
+        // 添加节点按钮
+        const addNodeBtn = document.getElementById('add-node-btn');
+        if (addNodeBtn) {
+            addNodeBtn.addEventListener('click', () => {
+                this.addNodeByClientId();
+            });
+        }
         
-        document.getElementById('stop-training-btn').addEventListener('click', () => {
-            this.stopGlobalTraining();
-        });
+        // 客户端ID输入框回车事件
+        const clientIdInput = document.getElementById('client-id-input');
+        if (clientIdInput) {
+            clientIdInput.addEventListener('keypress', (e) => {
+                if (e.key === 'Enter') {
+                    this.addNodeByClientId();
+                }
+            });
+        }
         
-        document.getElementById('reset-btn').addEventListener('click', () => {
-            this.resetSystem();
-        });
+        // 开始训练按钮
+        const startTrainingBtn = document.getElementById('start-training-btn');
+        if (startTrainingBtn) {
+            startTrainingBtn.addEventListener('click', () => {
+                this.startGlobalTraining();
+            });
+        }
+        
+        // 停止训练按钮
+        const stopTrainingBtn = document.getElementById('stop-training-btn');
+        if (stopTrainingBtn) {
+            stopTrainingBtn.addEventListener('click', () => {
+                this.stopGlobalTraining();
+            });
+        }
+        
+        // 重置按钮
+        const resetBtn = document.getElementById('reset-btn');
+        if (resetBtn) {
+            resetBtn.addEventListener('click', () => {
+                this.resetSystem();
+            });
+        }
         
         // 参数调整按钮
-        document.getElementById('round-plus').addEventListener('click', () => {
-            this.adjustRounds(1);
-        });
+        const roundPlus = document.getElementById('round-plus');
+        const roundMinus = document.getElementById('round-minus');
+        const clientPlus = document.getElementById('client-plus');
+        const clientMinus = document.getElementById('client-minus');
         
-        document.getElementById('round-minus').addEventListener('click', () => {
-            this.adjustRounds(-1);
-        });
-        
-        document.getElementById('client-plus').addEventListener('click', () => {
-            this.adjustParticipatingClients(1);
-        });
-        
-        document.getElementById('client-minus').addEventListener('click', () => {
-            this.adjustParticipatingClients(-1);
-        });
-        
-        // 添加节点按钮（用于演示）
-        document.getElementById('add-node-btn').addEventListener('click', () => {
-            this.addDemoClient();
-        });
+        if (roundPlus) roundPlus.addEventListener('click', () => this.adjustRounds(1));
+        if (roundMinus) roundMinus.addEventListener('click', () => this.adjustRounds(-1));
+        if (clientPlus) clientPlus.addEventListener('click', () => this.adjustParticipatingClients(1));
+        if (clientMinus) clientMinus.addEventListener('click', () => this.adjustParticipatingClients(-1));
         
         // 日志控制
-        document.getElementById('clear-log-btn').addEventListener('click', () => {
-            this.clearLog();
-        });
+        const clearLogBtn = document.getElementById('clear-log-btn');
+        const clearServerLogsBtn = document.getElementById('clear-server-logs');
         
-        document.getElementById('magnify-log-btn').addEventListener('click', () => {
-            this.toggleLogSize();
-        });
+        if (clearLogBtn) {
+            clearLogBtn.addEventListener('click', () => {
+                this.clearLog();
+            });
+        }
+        
+        if (clearServerLogsBtn) {
+            clearServerLogsBtn.addEventListener('click', () => {
+                this.clearServerLogs();
+            });
+        }
     }
     
-    adjustRounds(delta) {
-        const input = document.getElementById('round-number');
-        let value = parseInt(input.value) + delta;
-        value = Math.max(1, Math.min(10, value));
-        input.value = value;
-        this.totalRounds = value;
-    }
-    
-    adjustParticipatingClients(delta) {
-        const input = document.getElementById('client-number');
-        let value = parseInt(input.value) + delta;
-        value = Math.max(0, Math.min(8, value));
-        input.value = value;
-        this.participatingClients = value;
-    }
-    
-    async startGlobalTraining() {
-        if (this.connectedClients.length === 0) {
-            this.addLogEntry('没有连接的客户端，无法开始训练', 'warning');
+    // 通过客户端ID添加节点
+    async addNodeByClientId() {
+        const clientIdInput = document.getElementById('client-id-input');
+        const clientId = clientIdInput.value.trim();
+        
+        if (!clientId) {
+            this.showMessage('请输入客户端ID', 'error');
             return;
         }
         
-        this.trainingInProgress = true;
-        this.updateTrainingControls();
-        this.updateStatusDisplay('正在进行联邦学习训练...');
-        
-        this.totalRounds = parseInt(document.getElementById('round-number').value);
-        this.participatingClients = parseInt(document.getElementById('client-number').value);
-        
-        if (this.participatingClients === 0) {
-            this.participatingClients = this.connectedClients.length;
+        // 验证客户端ID格式
+        if (!/^CLIENT_[A-Z0-9]{8}$/.test(clientId)) {
+            this.showMessage('客户端ID格式错误，应为 CLIENT_XXXXXXXX', 'error');
+            return;
         }
         
-        this.addLogEntry(`开始联邦学习训练，共 ${this.totalRounds} 轮`, 'success');
-        this.addLogEntry(`参与训练的客户端数量: ${this.participatingClients}`, 'info');
-        
-        // 开始训练轮次
-        for (let round = 1; round <= this.totalRounds; round++) {
-            if (!this.trainingInProgress) break;
+        try {
+            const response = await fetch('/api/add_node', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ client_id: clientId })
+            });
             
-            this.currentRound = round;
-            await this.executeTrainingRound(round);
-        }
-        
-        if (this.trainingInProgress) {
-            this.completeTraining();
+            const result = await response.json();
+            
+            if (result.success) {
+                this.showMessage(result.message, 'success');
+                this.addNodeToDisplay(clientId, result.username);
+                clientIdInput.value = '';
+                this.loadNodes(); // 重新加载节点状态
+            } else {
+                this.showMessage(result.message, 'error');
+            }
+        } catch (error) {
+            console.error('添加节点错误:', error);
+            this.showMessage('添加节点失败: ' + error.message, 'error');
         }
     }
     
+    // 在界面上添加节点显示
+    addNodeToDisplay(clientId, username) {
+        const nodesContainer = document.getElementById('nodes-container');
+        if (!nodesContainer) return;
+        
+        // 检查节点是否已存在
+        if (this.nodes.has(clientId)) {
+            return;
+        }
+        
+        const nodeElement = document.createElement('div');
+        nodeElement.className = 'node client-node';
+        nodeElement.id = `node-${clientId}`;
+        nodeElement.innerHTML = `
+            <div class="node-header">
+                <span class="node-title">
+                    <i class="fas fa-laptop"></i> ${username || clientId}
+                </span>
+                <button class="node-remove-btn" onclick="serverDash.removeNode('${clientId}')">×</button>
+            </div>
+            <div class="node-content">
+                <div class="node-status" id="status-${clientId}">离线</div>
+                <div class="node-data-status" id="data-${clientId}">
+                    <i class="fas fa-times-circle text-danger"></i> 未上传数据
+                </div>
+                <div class="node-training-status" id="training-${clientId}">
+                    <i class="fas fa-pause-circle text-secondary"></i> 待机中
+                </div>
+            </div>
+        `;
+        
+        nodesContainer.appendChild(nodeElement);
+        this.nodes.set(clientId, {
+            element: nodeElement,
+            username: username || clientId,
+            status: 'offline',
+            hasData: false,
+            isTraining: false
+        });
+        
+        this.addLogEntry(`添加了节点: ${clientId} (${username})`, 'info');
+    }
+    
+    // 移除节点
+    async removeNode(clientId) {
+        if (confirm(`确定要移除节点 ${clientId} 吗？`)) {
+            const nodeElement = document.getElementById(`node-${clientId}`);
+            if (nodeElement) {
+                nodeElement.remove();
+            }
+            this.nodes.delete(clientId);
+            this.addLogEntry(`移除了节点: ${clientId}`, 'warning');
+        }
+    }
+    
+    // 开始全局训练
+    async startGlobalTraining() {
+        try {
+            const response = await fetch('/api/start_training', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                }
+            });
+            
+            const result = await response.json();
+            
+            if (result.success) {
+                this.trainingInProgress = true;
+                this.updateTrainingControls();
+                this.showMessage(result.message, 'success');
+                this.addLogEntry(`训练已开始: ${result.message}`, 'success');
+                
+                // 更新中心节点状态
+                this.updateCentralNodeStatus('训练中');
+                
+                // 更新有数据的节点状态为训练中
+                this.updateNodesTrainingStatus();
+                
+            } else {
+                this.showMessage(result.message, 'error');
+            }
+        } catch (error) {
+            console.error('开始训练错误:', error);
+            this.showMessage('开始训练失败: ' + error.message, 'error');
+        }
+    }
+    
+    // 停止全局训练
+    stopGlobalTraining() {
+        this.trainingInProgress = false;
+        this.updateTrainingControls();
+        this.updateCentralNodeStatus('待机中');
+        this.addLogEntry('训练已停止', 'warning');
+        
+        // 更新所有节点状态
+        this.nodes.forEach((node, clientId) => {
+            this.updateNodeTrainingStatus(clientId, false);
+        });
+    }
+      // 重置系统
+    resetSystem() {
+        if (confirm('确定要重置系统吗？这将清除所有节点和日志。')) {
+            // 清除所有节点
+            this.nodes.clear();
+            const nodesContainer = document.getElementById('nodes-container');
+            if (nodesContainer) {
+                nodesContainer.innerHTML = '';
+            }
+            
+            // 重置状态
+            this.trainingInProgress = false;
+            this.updateTrainingControls();
+            this.updateCentralNodeStatus('待机中');
+            
+            // 清除日志
+            this.clearLog();
+            this.clearServerLogs();
+            
+            this.addLogEntry('系统已重置', 'info');
+        }
+    }
+    
+    // 执行训练轮次
     async executeTrainingRound(round) {
         this.addLogEntry(`开始第 ${round}/${this.totalRounds} 轮训练`, 'info');
         
@@ -212,181 +382,193 @@ class ServerDashboard {
         this.addLogEntry('系统已重置', 'info');
     }
     
+    // 更新训练控制按钮状态
     updateTrainingControls() {
         const startBtn = document.getElementById('start-training-btn');
         const stopBtn = document.getElementById('stop-training-btn');
         
-        startBtn.disabled = this.trainingInProgress;
-        stopBtn.disabled = !this.trainingInProgress;
+        if (startBtn) startBtn.disabled = this.trainingInProgress;
+        if (stopBtn) stopBtn.disabled = !this.trainingInProgress;
     }
     
-    updateStatusDisplay(message) {
-        const statusDisplay = document.getElementById('status-display');
-        statusDisplay.innerHTML = `<p>${message}</p>`;
+    // 更新中心节点状态
+    updateCentralNodeStatus(status) {
+        const centralNode = document.querySelector('.central-node .node-status');
+        if (centralNode) {
+            centralNode.textContent = status;
+            centralNode.className = `node-status ${status === '训练中' ? 'training' : 'idle'}`;
+        }
     }
     
-    updateClientStatus(clients, status) {
-        clients.forEach(client => {
-            client.status = status;
-        });
-        this.updateClientsDisplay();
-    }
-    
-    loadConnectedClients() {
-        // 模拟一些已连接的客户端
-        const demoClients = [
-            { id: 1, name: '客户端-001', status: 'online', lastSeen: new Date() },
-            { id: 2, name: '客户端-002', status: 'online', lastSeen: new Date() },
-            { id: 3, name: '客户端-003', status: 'online', lastSeen: new Date() }
-        ];
-        
-        this.connectedClients = demoClients;
-        this.updateClientsDisplay();
-        
-        setTimeout(() => {
-            this.addLogEntry(`${demoClients.length} 个客户端已连接`, 'success');
-        }, 1000);
-    }
-    
-    addDemoClient() {
-        const newClientId = this.connectedClients.length + 1;
-        const newClient = {
-            id: newClientId,
-            name: `客户端-${String(newClientId).padStart(3, '0')}`,
-            status: 'online',
-            lastSeen: new Date()
-        };
-        
-        this.connectedClients.push(newClient);
-        this.updateClientsDisplay();
-        this.addLogEntry(`新客户端 ${newClient.name} 已连接`, 'success');
-    }
-    
-    updateClientsDisplay() {
-        const clientsList = document.getElementById('clients-list');
-        clientsList.innerHTML = '';
-        
-        if (this.connectedClients.length === 0) {
-            clientsList.innerHTML = '<div class="text-muted text-center py-3">暂无连接的客户端</div>';
-            return;
+    // 更新节点训练状态
+    updateNodeTrainingStatus(clientId, isTraining) {
+        const trainingStatus = document.getElementById(`training-${clientId}`);
+        if (trainingStatus) {
+            if (isTraining) {
+                trainingStatus.innerHTML = '<i class="fas fa-play-circle text-success"></i> 训练中';
+            } else {
+                trainingStatus.innerHTML = '<i class="fas fa-pause-circle text-secondary"></i> 待机中';
+            }
         }
         
-        this.connectedClients.forEach(client => {
-            const clientItem = document.createElement('div');
-            clientItem.className = 'client-item';
-            clientItem.innerHTML = `
-                <div class="client-info">
-                    <div class="client-name">
-                        <i class="fas fa-laptop"></i> ${client.name}
-                    </div>
-                    <div class="client-last-seen">
-                        最后活动: ${client.lastSeen.toLocaleTimeString()}
-                    </div>
-                </div>
-                <div class="client-status ${client.status}">
-                    ${this.getStatusText(client.status)}
-                </div>
-            `;
-            clientsList.appendChild(clientItem);
-        });
+        // 更新内存中的节点状态
+        if (this.nodes.has(clientId)) {
+            this.nodes.get(clientId).isTraining = isTraining;
+        }
     }
     
-    getStatusText(status) {
-        const statusMap = {
-            'online': '在线',
-            'training': '训练中',
-            'offline': '离线'
-        };
-        return statusMap[status] || status;
-    }
-    
-    initGlobalLossChart() {
-        const ctx = document.getElementById('global-loss-chart').getContext('2d');
-        this.globalLossChart = new Chart(ctx, {
-            type: 'line',
-            data: {
-                labels: [],
-                datasets: [{
-                    label: '全局Loss',
-                    data: [],
-                    borderColor: '#4a6fa5',
-                    backgroundColor: 'rgba(74, 111, 165, 0.1)',
-                    borderWidth: 3,
-                    fill: true,
-                    tension: 0.4,
-                    pointBackgroundColor: '#4a6fa5',
-                    pointBorderColor: '#ffffff',
-                    pointBorderWidth: 2,
-                    pointRadius: 6,
-                    pointHoverRadius: 8
-                }]
-            },
-            options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                plugins: {
-                    legend: {
-                        display: true,
-                        position: 'top',
-                        labels: {
-                            font: {
-                                size: 12,
-                                weight: 'bold'
-                            }
-                        }
-                    }
-                },
-                scales: {
-                    x: {
-                        title: {
-                            display: true,
-                            text: '训练轮次',
-                            font: {
-                                size: 12,
-                                weight: 'bold'
-                            }
-                        },
-                        grid: {
-                            color: 'rgba(0, 0, 0, 0.1)'
-                        }
-                    },
-                    y: {
-                        title: {
-                            display: true,
-                            text: 'Loss',
-                            font: {
-                                size: 12,
-                                weight: 'bold'
-                            }
-                        },
-                        beginAtZero: false,
-                        grid: {
-                            color: 'rgba(0, 0, 0, 0.1)'
-                        }
-                    }
-                },
-                interaction: {
-                    intersect: false,
-                    mode: 'index'
-                }
+    // 更新所有节点训练状态
+    updateNodesTrainingStatus() {
+        this.nodes.forEach((node, clientId) => {
+            if (node.hasData) {
+                this.updateNodeTrainingStatus(clientId, true);
             }
         });
     }
     
-    updateGlobalLossChart(round, loss) {
-        if (!this.globalLossChart) return;
-        
-        this.globalLossChart.data.labels.push(`Round ${round}`);
-        this.globalLossChart.data.datasets[0].data.push(loss);
-        this.globalLossChart.update('active');
+    // 加载节点
+    async loadNodes() {
+        try {
+            const response = await fetch('/api/server_nodes');
+            if (response.ok) {
+                const nodes = await response.json();
+                
+                // 清空现有节点显示
+                const nodesContainer = document.getElementById('nodes-container');
+                if (nodesContainer) {
+                    nodesContainer.innerHTML = '';
+                }
+                this.nodes.clear();
+                
+                // 添加节点到显示
+                nodes.forEach(node => {
+                    this.addNodeToDisplay(node.client_id, node.username);
+                });
+            }
+        } catch (error) {
+            console.error('加载节点错误:', error);
+        }
     }
     
-    resetGlobalLossChart() {
-        if (!this.globalLossChart) return;
+    // 加载服务器日志
+    async loadServerLogs() {
+        try {
+            const response = await fetch('/api/server_logs');
+            if (response.ok) {
+                const logs = await response.json();
+                // 这里可以根据需要处理日志显示
+            }
+        } catch (error) {
+            console.error('加载服务器日志错误:', error);
+        }
+    }
+    
+    // 更新客户端状态
+    async updateClientStatus() {
+        try {
+            const response = await fetch('/api/client_status');
+            if (response.ok) {
+                const statuses = await response.json();
+                
+                // 更新节点状态显示
+                this.nodes.forEach((node, clientId) => {
+                    const clientStatus = statuses.find(s => s.client_id === clientId);
+                    if (clientStatus) {
+                        this.updateNodeStatus(clientId, clientStatus);
+                    }
+                });
+            }
+        } catch (error) {
+            console.error('更新客户端状态错误:', error);
+        }
+    }
+    
+    // 更新单个节点状态
+    updateNodeStatus(clientId, statusData) {
+        const statusElement = document.getElementById(`status-${clientId}`);
+        const dataElement = document.getElementById(`data-${clientId}`);
         
-        this.globalLossChart.data.labels = [];
-        this.globalLossChart.data.datasets[0].data = [];
-        this.globalLossChart.update();
+        if (statusElement) {
+            const isOnline = statusData.is_online;
+            statusElement.textContent = isOnline ? '在线' : '离线';
+            statusElement.className = `node-status ${isOnline ? 'online' : 'offline'}`;
+        }
+        
+        if (dataElement) {
+            const hasData = statusData.has_uploaded_data;
+            if (hasData) {
+                dataElement.innerHTML = '<i class="fas fa-check-circle text-success"></i> 已上传数据';
+            } else {
+                dataElement.innerHTML = '<i class="fas fa-times-circle text-danger"></i> 未上传数据';
+            }
+        }
+        
+        // 更新内存中的节点状态
+        if (this.nodes.has(clientId)) {
+            const node = this.nodes.get(clientId);
+            node.status = statusData.is_online ? 'online' : 'offline';
+            node.hasData = statusData.has_uploaded_data;
+        }
+    }
+    
+    // 清除服务器日志
+    async clearServerLogs() {
+        try {
+            const response = await fetch('/api/clear_server_logs', {
+                method: 'POST'
+            });
+            
+            if (response.ok) {
+                this.addLogEntry('服务器日志已清空', 'info');
+            }
+        } catch (error) {
+            console.error('清除服务器日志错误:', error);
+        }
+    }
+    
+    // 显示消息
+    showMessage(message, type = 'info') {
+        // 创建消息提示
+        const messageDiv = document.createElement('div');
+        messageDiv.className = `alert alert-${type === 'error' ? 'danger' : type === 'success' ? 'success' : 'info'} alert-dismissible fade show`;
+        messageDiv.style.position = 'fixed';
+        messageDiv.style.top = '20px';
+        messageDiv.style.right = '20px';
+        messageDiv.style.zIndex = '9999';
+        messageDiv.style.minWidth = '300px';
+        
+        messageDiv.innerHTML = `
+            ${message}
+            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        `;
+        
+        document.body.appendChild(messageDiv);
+        
+        // 自动移除消息
+        setTimeout(() => {
+            if (messageDiv.parentNode) {
+                messageDiv.parentNode.removeChild(messageDiv);
+            }
+        }, 5000);
+    }
+    
+    // 调整训练轮数
+    adjustRounds(delta) {
+        const roundsDisplay = document.getElementById('rounds-value');
+        if (roundsDisplay) {
+            this.totalRounds = Math.max(1, Math.min(20, this.totalRounds + delta));
+            roundsDisplay.textContent = this.totalRounds;
+        }
+    }
+    
+    // 调整参与客户端数量
+    adjustParticipatingClients(delta) {
+        const clientsDisplay = document.getElementById('clients-value');
+        if (clientsDisplay) {
+            const maxClients = this.nodes.size;
+            this.participatingClients = Math.max(1, Math.min(maxClients, (this.participatingClients || 1) + delta));
+            clientsDisplay.textContent = this.participatingClients;
+        }
     }
     
     addLogEntry(message, type = 'info') {
@@ -437,6 +619,7 @@ class ServerDashboard {
 }
 
 // 初始化服务器仪表板
+let serverDash;
 document.addEventListener('DOMContentLoaded', () => {
-    new ServerDashboard();
+    serverDash = new ServerDashboard();
 });

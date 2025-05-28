@@ -1,49 +1,49 @@
 #!/usr/bin/env python3
-"""
-快速测试脚本：自动登录并访问服务器仪表板
-"""
+# -*- coding: utf-8 -*-
 
 import requests
-import webbrowser
+import json
 
-# 应用基础URL
-BASE_URL = "http://127.0.0.1:5000"
-
-def test_login_and_dashboard():
-    """测试登录并访问服务器仪表板"""
+def test_login_and_client_id():
+    """测试登录功能和客户端ID显示"""
+    base_url = "http://127.0.0.1:5000"
+    
+    # 创建会话
     session = requests.Session()
     
-    # 首先获取登录页面以获取任何CSRF tokens
-    login_page = session.get(f"{BASE_URL}/login")
-    print(f"登录页面状态码: {login_page.status_code}")
-    
-    # 尝试登录
-    login_data = {
-        'username': 'admin',
-        'password': 'admin123',  # 假设密码
-        'account_type': 'server'
-    }
-    
-    response = session.post(f"{BASE_URL}/login", data=login_data, allow_redirects=False)
-    print(f"登录请求状态码: {response.status_code}")
-    
-    if response.status_code in [200, 302]:
-        # 尝试访问服务器仪表板
-        dashboard_response = session.get(f"{BASE_URL}/server/dashboard")
-        print(f"仪表板访问状态码: {dashboard_response.status_code}")
+    try:
+        # 先访问登录页面获取CSRF token等
+        login_page = session.get(f"{base_url}/login?session_type=client")
+        print(f"登录页面访问状态: {login_page.status_code}")
         
-        if dashboard_response.status_code == 200:
-            print("✅ 成功访问服务器仪表板!")
-            print("在浏览器中打开仪表板...")
-            webbrowser.open(f"{BASE_URL}/server/dashboard")
+        # 登录请求
+        login_data = {
+            'username': 'user1',
+            'password': 'password123'  # 假设密码是这个，可能需要调整
+        }
+        
+        login_response = session.post(f"{base_url}/login?session_type=client", data=login_data)
+        print(f"登录响应状态: {login_response.status_code}")
+        
+        # 如果登录成功，访问客户端仪表板
+        if login_response.status_code == 200 or login_response.status_code == 302:
+            dashboard_response = session.get(f"{base_url}/client/dashboard")
+            print(f"仪表板访问状态: {dashboard_response.status_code}")
+            
+            # 检查响应内容中是否包含客户端ID
+            if 'CLIENT_VJ3VDJR7' in dashboard_response.text:
+                print("✅ 客户端ID显示正常: CLIENT_VJ3VDJR7")
+            elif '未分配' in dashboard_response.text:
+                print("❌ 客户端ID显示为'未分配'")
+            else:
+                print("⚠️ 客户端ID状态未知")
+                
         else:
-            print("❌ 无法访问仪表板")
-            print("尝试直接在浏览器中访问...")
-            webbrowser.open(f"{BASE_URL}/login")
-    else:
-        print("❌ 登录失败")
-        print("在浏览器中打开登录页面...")
-        webbrowser.open(f"{BASE_URL}/login")
+            print("❌ 登录失败")
+            print(f"响应内容: {login_response.text[:500]}")
+            
+    except Exception as e:
+        print(f"测试过程中出错: {e}")
 
 if __name__ == "__main__":
-    test_login_and_dashboard()
+    test_login_and_client_id()

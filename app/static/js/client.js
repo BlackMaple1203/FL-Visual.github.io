@@ -8,11 +8,14 @@ class ClientDashboard {
         this.trainingData = [];
         this.currentRound = 0;
         this.totalRounds = 0;
+        this.socket = null; // SocketIO连接
+        this.trainingId = null; // 当前训练ID
         
         this.init();
     }
     
     init() {
+        this.initializeSocket();
         this.setupEventListeners();
         this.setupFileUpload();
         this.initLossChart();
@@ -32,25 +35,175 @@ class ClientDashboard {
         }, 30000); // 每30秒更新一次
     }
     
-    setupEventListeners() {
-        // 训练控制按钮
-        document.getElementById('start-training').addEventListener('click', () => {
-            this.startTraining();
+    // 初始化SocketIO连接
+    initializeSocket() {
+        if (window.flSocket) {
+            this.socket = window.flSocket;
+            this.setupSocketListeners();
+        }
+    }
+    
+    // 设置Socket事件监听器
+    setupSocketListeners() {
+        if (!this.socket) return;
+        
+        // 监听加入训练事件
+        this.socket.on('join_training', (data) => {
+            this.handleJoinTraining(data);
         });
         
-        document.getElementById('stop-training').addEventListener('click', () => {
-            this.stopTraining();
+        // 监听连接状态
+        this.socket.on('connect', () => {
+            this.updateConnectionStatus('已连接', 'success');
         });
+        
+        this.socket.on('disconnect', () => {
+            this.updateConnectionStatus('连接断开', 'error');
+        });
+    }
+    
+    // 处理加入训练事件
+    handleJoinTraining(data) {
+        this.trainingId = data.training_id;
+        this.totalRounds = data.rounds;
+        this.currentRound = 0;
+        
+        this.addLogEntry(`收到训练邀请 - 训练ID: ${data.training_id}, 轮数: ${data.rounds}`, 'info');
+        this.startClientTraining();
+    }
+    
+    // 开始客户端训练
+    startClientTraining() {
+        if (this.uploadedFiles.length === 0) {
+            this.addLogEntry('没有训练数据，无法开始训练', 'warning');
+            return;
+        }
+        
+        this.isTraining = true;
+        this.updateTrainingStatus('训练中');
+        this.addLogEntry('开始本地训练...', 'info');
+        
+        // 开始训练轮次
+        this.trainNextRound();
+    }
+    
+    // 训练下一轮
+    trainNextRound() {
+        if (!this.isTraining || this.currentRound >= this.totalRounds) {
+            this.completeTraining();
+            return;
+        }
+        
+        this.currentRound++;
+        this.addLogEntry(`开始第 ${this.currentRound} 轮本地训练`, 'info');
+        
+        // 模拟训练过程
+        const trainingDuration = Math.random() * 3000 + 2000; // 2-5秒
+        
+        setTimeout(() => {
+            this.completeRound();
+        }, trainingDuration);
+    }
+    
+    // 完成当前轮次
+    completeRound() {
+        // 模拟训练结果
+        const loss = Math.random() * 0.5 + 0.2; // 0.2-0.7
+        const accuracy = Math.random() * 0.3 + 0.7; // 0.7-1.0
+        
+        this.addLogEntry(`第 ${this.currentRound} 轮完成 - Loss: ${loss.toFixed(4)}, Accuracy: ${(accuracy * 100).toFixed(2)}%`, 'success');
+        
+        // 更新图表数据
+        this.updateTrainingChart(this.currentRound, loss, accuracy);
+        
+        // 通知服务器完成训练轮次
+        if (this.socket && this.trainingId) {
+            this.socket.emit('training_round_complete', {
+                training_id: this.trainingId,
+                round: this.currentRound,
+                loss: loss,
+                accuracy: accuracy
+            });
+        }
+        
+        // 继续下一轮或完成训练
+        if (this.currentRound < this.totalRounds) {
+            setTimeout(() => {
+                this.trainNextRound();
+            }, 1000); // 1秒后开始下一轮
+        } else {
+            this.completeTraining();
+        }
+    }
+    
+    // 完成训练
+    completeTraining() {
+        this.isTraining = false;
+        this.updateTrainingStatus('训练完成');
+        this.addLogEntry(`所有 ${this.totalRounds} 轮训练已完成`, 'success');
+        
+        // 重置训练相关变量
+        this.trainingId = null;
+        this.currentRound = 0;
+        this.totalRounds = 0;
+    }
+    
+    // 更新训练状态显示
+    updateTrainingStatus(status) {
+        const statusElement = document.getElementById('training-status');
+        if (statusElement) {
+            statusElement.textContent = status;
+            statusElement.className = `training-status ${this.isTraining ? 'active' : 'inactive'}`;
+        }
+    }
+    
+    // 更新连接状态
+    updateConnectionStatus(text, status) {
+        const statusText = document.getElementById('status-text');
+        const statusIndicator = document.getElementById('connection-status');
+        
+        if (statusText) statusText.textContent = text || '连接中...';
+        if (statusIndicator) {
+            statusIndicator.className = `status-indicator ${status || 'warning'}`;
+        }
+    }
+    
+    // 更新训练图表
+    updateTrainingChart(round, loss, accuracy) {
+        if (!this.lossChart) return;
+        
+        // 添加新数据点
+        this.lossChart.data.labels.push(`第${round}轮`);
+        this.lossChart.data.datasets[0].data.push(loss);
+        this.lossChart.data.datasets[1].data.push(accuracy);
+        
+        // 更新图表
+        this.lossChart.update();
+    }
+      setupEventListeners() {
+        // 更新参数按钮
+        const updateParamsBtn = document.getElementById('update-parameters');
+        if (updateParamsBtn) {
+            updateParamsBtn.addEventListener('click', () => {
+                this.updateParameters();
+            });
+        }
         
         // 清空日志
-        document.getElementById('clear-log').addEventListener('click', () => {
-            this.clearLog();
-        });
+        const clearLogBtn = document.getElementById('clear-log');
+        if (clearLogBtn) {
+            clearLogBtn.addEventListener('click', () => {
+                this.clearLog();
+            });
+        }
         
         // 文件输入
-        document.getElementById('file-input').addEventListener('change', (e) => {
-            this.handleFileSelect(e.target.files);
-        });
+        const fileInput = document.getElementById('file-input');
+        if (fileInput) {
+            fileInput.addEventListener('change', (e) => {
+                this.handleFileSelect(e.target.files);
+            });
+        }
     }
     
     setupFileUpload() {
@@ -108,8 +261,7 @@ class ClientDashboard {
         this.updateUploadedFilesList();
         this.updateTrainingButtonState();
     }
-    
-    uploadSingleFile(file, index, total) {
+      async uploadSingleFile(file, index, total) {
         return new Promise((resolve) => {
             const progressBar = document.getElementById('upload-progress');
             const statusDiv = document.getElementById('upload-status');
@@ -136,6 +288,11 @@ class ClientDashboard {
                     });
                     
                     this.addLogEntry(`文件 ${file.name} 上传成功`, 'success');
+                    
+                    // 如果是最后一个文件，通知服务器
+                    if (index === total) {
+                        this.notifyDataUpload();
+                    }
                     
                     setTimeout(resolve, 500);
                 }
@@ -190,19 +347,20 @@ class ClientDashboard {
         const i = Math.floor(Math.log(bytes) / Math.log(k));
         return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
     }
-    
-    updateTrainingButtonState() {
-        const startBtn = document.getElementById('start-training');
+      updateTrainingButtonState() {
+        const updateBtn = document.getElementById('update-parameters');
         const hasFiles = this.uploadedFiles.length > 0;
         
-        startBtn.disabled = !hasFiles || this.isTraining;
-        
-        if (hasFiles && !this.isTraining) {
-            startBtn.classList.remove('btn-secondary');
-            startBtn.classList.add('btn-success');
-        } else {
-            startBtn.classList.remove('btn-success');
-            startBtn.classList.add('btn-secondary');
+        if (updateBtn) {
+            updateBtn.disabled = !hasFiles || this.isTraining;
+            
+            if (hasFiles && !this.isTraining) {
+                updateBtn.classList.remove('btn-secondary');
+                updateBtn.classList.add('btn-success');
+            } else {
+                updateBtn.classList.remove('btn-success');
+                updateBtn.classList.add('btn-secondary');
+            }
         }
     }
     
@@ -738,6 +896,78 @@ class ClientDashboard {
         setTimeout(() => {
             this.addLogEntry('训练报告生成完成', 'success');
         }, 3000);
+    }
+      // 更新参数方法
+    updateParameters() {
+        if (this.uploadedFiles.length === 0) {
+            this.addLogEntry('请先上传训练数据', 'warning');
+            return;
+        }
+
+        // 启用/禁用按钮状态
+        const updateBtn = document.getElementById('update-parameters');
+        updateBtn.disabled = true;
+        updateBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> 更新中...';
+
+        this.addLogEntry('开始更新模型参数...', 'info');
+        this.notifyTrainingStatus('started', { current: 0, total: 1 });
+
+        // 模拟参数更新过程
+        setTimeout(() => {
+            this.addLogEntry('正在与服务器同步参数...', 'info');
+            
+            // 通知服务器更新参数
+            if (this.socket) {
+                this.socket.emit('update_parameters', {
+                    client_id: document.getElementById('client-id').textContent,
+                    data_count: this.uploadedFiles.length,
+                    timestamp: new Date().toISOString()
+                });
+            }
+
+            setTimeout(() => {
+                this.addLogEntry('模型参数更新完成', 'success');
+                this.notifyTrainingStatus('completed', { current: 1, total: 1 });
+                
+                updateBtn.disabled = false;
+                updateBtn.innerHTML = '<i class="fas fa-sync"></i> 更新参数';
+                
+                // 更新统计信息
+                this.updateClientStats();
+            }, 2000);
+        }, 1500);
+    }
+
+    // 更新客户端统计信息
+    updateClientStats() {
+        const totalSessions = parseInt(document.getElementById('total-sessions').textContent) + 1;
+        const completedSessions = parseInt(document.getElementById('completed-sessions').textContent) + 1;
+        
+        document.getElementById('total-sessions').textContent = totalSessions;
+        document.getElementById('completed-sessions').textContent = completedSessions;
+    }
+
+    // 通知服务器数据上传状态
+    notifyDataUpload() {
+        if (this.socket && this.uploadedFiles.length > 0) {
+            const clientId = document.getElementById('client-id').textContent;
+            this.socket.emit('client_data_uploaded', {
+                client_id: clientId,
+                file_count: this.uploadedFiles.length
+            });
+        }
+    }
+
+    // 通知服务器训练状态变化
+    notifyTrainingStatus(status, roundInfo = null) {
+        if (this.socket) {
+            const clientId = document.getElementById('client-id').textContent;
+            this.socket.emit('training_status_change', {
+                client_id: clientId,
+                status: status,
+                round_info: roundInfo
+            });
+        }
     }
 }
 

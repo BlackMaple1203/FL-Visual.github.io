@@ -7,9 +7,20 @@ let currentRound = 0;
 let totalRounds = 3;  // 默认训练轮数
 let participatingClientsCount = 0; // 每轮参与的客户端数量，0表示全部参与
 let shouldStopTraining = false;  // 新增：是否应该停止训练的标志
+let socket = null; // SocketIO连接
+
+// 初始化SocketIO连接
+function initSocketConnection() {
+    if (window.flSocket) {
+        socket = window.flSocket;
+    }
+}
 
 // 启动联邦学习过程
 function startFederatedLearning(rounds = 3, clientCount = 0) {
+    // 初始化Socket连接
+    initSocketConnection();
+    
     // 设置训练参数
     totalRounds = rounds;
     participatingClientsCount = clientCount;
@@ -24,6 +35,14 @@ function startFederatedLearning(rounds = 3, clientCount = 0) {
     
     trainingComplete = false;
     currentRound = 0;
+    
+    // 通过SocketIO通知开始训练
+    if (socket) {
+        socket.emit('start_training', {
+            rounds: rounds,
+            client_count: clientCount
+        });
+    }
     
     // 开始第一轮训练
     trainNextRound();
