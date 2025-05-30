@@ -1,0 +1,14 @@
+monai
+torch
+torchvision
+numpy
+matplotlib
+pandas
+scipy
+SimpleITK
+scikit-image
+nibabel
+tqdm
+
+# 联邦学习相关依赖
+typing_extensions

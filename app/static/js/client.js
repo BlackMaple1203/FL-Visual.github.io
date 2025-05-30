@@ -4,7 +4,6 @@ class ClientDashboard {
     constructor() {
         this.isTraining = false;
         this.uploadedFiles = [];
-        this.lossChart = null;
         this.trainingData = [];
         this.currentRound = 0;
         this.totalRounds = 0;
@@ -18,7 +17,6 @@ class ClientDashboard {
         this.initializeSocket();
         this.setupEventListeners();
         this.setupFileUpload();
-        this.initLossChart();
         this.updateConnectionStatus();
         this.addLogEntry('客户端已启动，等待训练指令...', 'info');
         
@@ -113,9 +111,6 @@ class ClientDashboard {
         
         this.addLogEntry(`第 ${this.currentRound} 轮完成 - Loss: ${loss.toFixed(4)}, Accuracy: ${(accuracy * 100).toFixed(2)}%`, 'success');
         
-        // 更新图表数据
-        this.updateTrainingChart(this.currentRound, loss, accuracy);
-        
         // 通知服务器完成训练轮次
         if (this.socket && this.trainingId) {
             this.socket.emit('training_round_complete', {
@@ -168,19 +163,7 @@ class ClientDashboard {
         }
     }
     
-    // 更新训练图表
-    updateTrainingChart(round, loss, accuracy) {
-        if (!this.lossChart) return;
-        
-        // 添加新数据点
-        this.lossChart.data.labels.push(`第${round}轮`);
-        this.lossChart.data.datasets[0].data.push(loss);
-        this.lossChart.data.datasets[1].data.push(accuracy);
-        
-        // 更新图表
-        this.lossChart.update();
-    }
-      setupEventListeners() {
+    setupEventListeners() {
         // 更新参数按钮
         const updateParamsBtn = document.getElementById('update-parameters');
         if (updateParamsBtn) {
@@ -430,24 +413,6 @@ class ClientDashboard {
         }, 3000);
     }
     
-    simulateRoundTraining() {
-        // 生成模拟loss数据
-        const baseLoss = 2.5;
-        const decay = 0.8;
-        const noise = (Math.random() - 0.5) * 0.2;
-        const loss = baseLoss * Math.pow(decay, this.currentRound - 1) + noise;
-        
-        this.trainingData.push({
-            round: this.currentRound,
-            loss: Math.max(0.1, loss)
-        });
-        
-        this.updateLossChart();
-        this.updateTrainingProgress();
-        
-        this.addLogEntry(`第 ${this.currentRound} 轮训练完成，Loss: ${loss.toFixed(4)}`, 'success');
-    }
-    
     updateTrainingProgress() {
         document.getElementById('current-round').textContent = `${this.currentRound}/${this.totalRounds}`;
     }
@@ -493,98 +458,6 @@ class ClientDashboard {
             default:
                 statusElement.classList.add('bg-secondary');
         }
-    }
-    
-    initLossChart() {
-        const ctx = document.getElementById('loss-chart').getContext('2d');
-        this.lossChart = new Chart(ctx, {
-            type: 'line',
-            data: {
-                labels: [],
-                datasets: [{
-                    label: 'Training Loss',
-                    data: [],
-                    borderColor: '#667eea',
-                    backgroundColor: 'rgba(102, 126, 234, 0.1)',
-                    borderWidth: 3,
-                    fill: true,
-                    tension: 0.4,
-                    pointBackgroundColor: '#667eea',
-                    pointBorderColor: '#ffffff',
-                    pointBorderWidth: 2,
-                    pointRadius: 6,
-                    pointHoverRadius: 8
-                }]
-            },
-            options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                plugins: {
-                    legend: {
-                        display: true,
-                        position: 'top',
-                        labels: {
-                            font: {
-                                size: 14,
-                                weight: 'bold'
-                            }
-                        }
-                    }
-                },
-                scales: {
-                    x: {
-                        title: {
-                            display: true,
-                            text: '训练轮次',
-                            font: {
-                                size: 14,
-                                weight: 'bold'
-                            }
-                        },
-                        grid: {
-                            color: 'rgba(0, 0, 0, 0.1)'
-                        }
-                    },
-                    y: {
-                        title: {
-                            display: true,
-                            text: 'Loss',
-                            font: {
-                                size: 14,
-                                weight: 'bold'
-                            }
-                        },
-                        beginAtZero: false,
-                        grid: {
-                            color: 'rgba(0, 0, 0, 0.1)'
-                        }
-                    }
-                },
-                interaction: {
-                    intersect: false,
-                    mode: 'index'
-                },
-                elements: {
-                    point: {
-                        hoverRadius: 8
-                    }
-                }
-            }
-        });
-    }
-    
-    updateLossChart() {
-        if (!this.lossChart) return;
-        
-        const labels = this.trainingData.map(d => `Round ${d.round}`);
-        const data = this.trainingData.map(d => d.loss);
-        
-        this.lossChart.data.labels = labels;
-        this.lossChart.data.datasets[0].data = data;
-        this.lossChart.update('active');
-        
-        // 隐藏"无数据"消息
-        document.getElementById('no-data-message').style.display = 'none';
     }
     
     generatePredictionResults() {
@@ -753,7 +626,6 @@ class ClientDashboard {
     
     updatePerformanceCharts(data) {
         this.createAccuracyChart(data);
-        this.createLossChart(data);
     }
     
     createAccuracyChart(data) {
@@ -788,38 +660,6 @@ class ClientDashboard {
                                 return (value * 100).toFixed(0) + '%';
                             }
                         }
-                    }
-                }
-            }
-        });
-    }
-    
-    createLossChart(data) {
-        const ctx = document.getElementById('loss-chart');
-        if (!ctx) return;
-        
-        new Chart(ctx, {
-            type: 'line',
-            data: {
-                labels: data.rounds,
-                datasets: [{
-                    label: '损失',
-                    data: data.loss,
-                    borderColor: '#dc3545',
-                    backgroundColor: 'rgba(220, 53, 69, 0.1)',
-                    tension: 0.4
-                }]
-            },
-            options: {
-                responsive: true,
-                plugins: {
-                    legend: {
-                        display: false
-                    }
-                },
-                scales: {
-                    y: {
-                        beginAtZero: true
                     }
                 }
             }
