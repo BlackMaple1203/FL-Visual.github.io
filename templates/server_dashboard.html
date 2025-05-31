@@ -304,6 +304,197 @@
             to { transform: rotate(360deg); }
         }
 
+        /* 推理功能样式 */
+        .inference-section {
+            margin-top: 1.5rem;
+        }
+
+        .inference-controls {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 1.5rem;
+            margin: 1.5rem 0;
+        }
+
+        .inference-upload {
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+        }
+
+        .inference-options {
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+        }
+
+        /* 新增样式 */
+        .inference-upload-buttons {
+            display: flex;
+            gap: 1rem;
+            margin-top: 1rem;
+        }
+
+        .upload-zone {
+            border: 2px dashed #667eea;
+            border-radius: 12px;
+            padding: 2rem;
+            text-align: center;
+            background: linear-gradient(135deg, rgba(102, 126, 234, 0.05), rgba(118, 75, 162, 0.05));
+            transition: all 0.3s ease;
+            cursor: pointer;
+            position: relative;
+        }
+
+        .upload-zone:hover {
+            border-color: #764ba2;
+            background: linear-gradient(135deg, rgba(102, 126, 234, 0.1), rgba(118, 75, 162, 0.1));
+            transform: translateY(-2px);
+            box-shadow: 0 8px 25px rgba(102, 126, 234, 0.2);
+        }
+
+        .upload-zone.dragover {
+            border-color: #764ba2;
+            background: linear-gradient(135deg, rgba(102, 126, 234, 0.15), rgba(118, 75, 162, 0.15));
+        }
+
+        .upload-icon {
+            font-size: 3rem;
+            color: #667eea;
+            margin-bottom: 1rem;
+        }
+
+        .upload-text {
+            font-size: 1.1rem;
+            color: #4a5568;
+            margin-bottom: 0.5rem;
+        }
+
+        .upload-hint {
+            font-size: 0.9rem;
+            color: #718096;
+        }
+
+        .btn-danger {
+            background: linear-gradient(45deg, #ff6b6b, #ee5a24);
+            color: white;
+            padding: 8px 16px;
+            border: none;
+            border-radius: 20px;
+            font-size: 0.9rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .btn-danger:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 6px 20px rgba(255, 107, 107, 0.4);
+        }
+
+        .btn-small {
+            padding: 6px 12px;
+            font-size: 0.8rem;
+            border-radius: 15px;
+        }
+
+        .file-info {
+            flex: 1;
+        }
+
+        .file-name {
+            font-weight: 600;
+            font-size: 1rem;
+            margin-bottom: 0.3rem;
+        }
+
+        .file-details {
+            font-size: 0.85rem;
+            opacity: 0.8;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 1rem;
+        }
+
+        .file-status {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            margin-top: 0.3rem;
+        }
+
+        .status-indicator-small {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+        }
+
+        .status-complete {
+            background: #48bb78;
+        }
+
+        .status-incomplete {
+            background: #ed8936;
+        }
+
+        .file-actions {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .file-type-icon {
+            font-size: 1.5rem;
+            color: #667eea;
+        }
+
+        .inference-file-item.selected .file-type-icon {
+            color: white;
+        }
+
+        .upload-progress {
+            margin-top: 1rem;
+            padding: 1rem;
+            background: #f7fafc;
+            border-radius: 8px;
+            display: none;
+        }
+
+        .progress-item {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            margin-bottom: 0.5rem;
+        }
+
+        .progress-item:last-child {
+            margin-bottom: 0;
+        }
+
+        .progress-filename {
+            flex: 1;
+            font-size: 0.9rem;
+        }
+
+        .progress-status {
+            font-size: 0.8rem;
+            padding: 2px 8px;
+            border-radius: 12px;
+        }
+
+        .progress-success {
+            background: #c6f6d5;
+            color: #22543d;
+        }
+
+        .progress-error {
+            background: #fed7d7;
+            color: #822727;
+        }
+
         @media (max-width: 768px) {
             .container {
                 grid-template-columns: 1fr;
@@ -320,6 +511,182 @@
             .status-grid {
                 grid-template-columns: 1fr;
             }
+
+            .inference-controls {
+                grid-template-columns: 1fr;
+            }
+
+            .file-details {
+                flex-direction: column;
+                gap: 0.3rem;
+            }
+        }
+
+        /* 新增样式 */
+        .inference-upload-buttons {
+            display: flex;
+            gap: 1rem;
+            margin-top: 1rem;
+        }
+
+        .upload-zone {
+            border: 2px dashed #667eea;
+            border-radius: 12px;
+            padding: 2rem;
+            text-align: center;
+            background: linear-gradient(135deg, rgba(102, 126, 234, 0.05), rgba(118, 75, 162, 0.05));
+            transition: all 0.3s ease;
+            cursor: pointer;
+            position: relative;
+        }
+
+        .upload-zone:hover {
+            border-color: #764ba2;
+            background: linear-gradient(135deg, rgba(102, 126, 234, 0.1), rgba(118, 75, 162, 0.1));
+            transform: translateY(-2px);
+            box-shadow: 0 8px 25px rgba(102, 126, 234, 0.2);
+        }
+
+        .upload-zone.dragover {
+            border-color: #764ba2;
+            background: linear-gradient(135deg, rgba(102, 126, 234, 0.15), rgba(118, 75, 162, 0.15));
+        }
+
+        .upload-icon {
+            font-size: 3rem;
+            color: #667eea;
+            margin-bottom: 1rem;
+        }
+
+        .upload-text {
+            font-size: 1.1rem;
+            color: #4a5568;
+            margin-bottom: 0.5rem;
+        }
+
+        .upload-hint {
+            font-size: 0.9rem;
+            color: #718096;
+        }
+
+        .btn-danger {
+            background: linear-gradient(45deg, #ff6b6b, #ee5a24);
+            color: white;
+            padding: 8px 16px;
+            border: none;
+            border-radius: 20px;
+            font-size: 0.9rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .btn-danger:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 6px 20px rgba(255, 107, 107, 0.4);
+        }
+
+        .btn-small {
+            padding: 6px 12px;
+            font-size: 0.8rem;
+            border-radius: 15px;
+        }
+
+        .file-info {
+            flex: 1;
+        }
+
+        .file-name {
+            font-weight: 600;
+            font-size: 1rem;
+            margin-bottom: 0.3rem;
+        }
+
+        .file-details {
+            font-size: 0.85rem;
+            opacity: 0.8;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 1rem;
+        }
+
+        .file-status {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            margin-top: 0.3rem;
+        }
+
+        .status-indicator-small {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+        }
+
+        .status-complete {
+            background: #48bb78;
+        }
+
+        .status-incomplete {
+            background: #ed8936;
+        }
+
+        .file-actions {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .file-type-icon {
+            font-size: 1.5rem;
+            color: #667eea;
+        }
+
+        .inference-file-item.selected .file-type-icon {
+            color: white;
+        }
+
+        .upload-progress {
+            margin-top: 1rem;
+            padding: 1rem;
+            background: #f7fafc;
+            border-radius: 8px;
+            display: none;
+        }
+
+        .progress-item {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            margin-bottom: 0.5rem;
+        }
+
+        .progress-item:last-child {
+            margin-bottom: 0;
+        }
+
+        .progress-filename {
+            flex: 1;
+            font-size: 0.9rem;
+        }
+
+        .progress-status {
+            font-size: 0.8rem;
+            padding: 2px 8px;
+            border-radius: 12px;
+        }
+
+        .progress-success {
+            background: #c6f6d5;
+            color: #22543d;
+        }
+
+        .progress-error {
+            background: #fed7d7;
+            color: #822727;
         }
     </style>
 </head>
@@ -373,6 +740,12 @@
                     <i class="fas fa-play"></i>
                     开始联邦学习训练
                 </button>
+                
+                <!-- 推理按钮 - 只有在训练完成后才显示 -->
+                <button id="inferenceBtn" class="btn-secondary" onclick="scrollToInference()" style="display: none; margin-left: 10px;">
+                    <i class="fas fa-brain"></i>
+                    模型推理
+                </button>
             </div>
         </div>
 
@@ -413,6 +786,100 @@
                     {% endfor %}
                 </tbody>
             </table>
+        </div>
+
+        <!-- 推理功能 -->
+        <div class="card">
+            <div class="card-header">
+                <i class="fas fa-brain"></i>
+                <h2>模型推理</h2>
+            </div>
+            
+            <div class="inference-section">
+                <div class="inference-controls">
+                    <div class="inference-upload">
+                        <h4><i class="fas fa-upload"></i> 上传推理文件</h4>
+                        
+                        <!-- 拖拽上传区域 -->
+                        <div class="upload-zone" onclick="document.getElementById('inferenceFileInput').click()" 
+                             ondrop="handleFileDrop(event)" ondragover="handleDragOver(event)" ondragenter="handleDragEnter(event)" ondragleave="handleDragLeave(event)">
+                            <div class="upload-icon">
+                                <i class="fas fa-cloud-upload-alt"></i>
+                            </div>
+                            <div class="upload-text">点击或拖拽文件到此处上传</div>
+                            <div class="upload-hint">请同时上传一组.mhd和.raw文件（支持多文件选择）</div>
+                        </div>
+                        
+                        <input type="file" id="inferenceFileInput" accept=".mhd,.raw" multiple style="display: none;" onchange="handleInferenceFileUpload(event)">
+                        
+                        <div class="inference-upload-buttons">
+                            <button class="btn-secondary" onclick="document.getElementById('inferenceFileInput').click()">
+                                <i class="fas fa-file-upload"></i> 选择文件
+                            </button>
+                            <button class="btn-secondary" onclick="refreshFileList()">
+                                <i class="fas fa-sync-alt"></i> 刷新列表
+                            </button>
+                        </div>
+                        
+                        <!-- 上传进度显示 -->
+                        <div class="upload-progress" id="uploadProgress">
+                            <h5><i class="fas fa-hourglass-half"></i> 上传进度</h5>
+                            <div id="uploadProgressList"></div>
+                        </div>
+                    </div>
+                    
+                    <div class="inference-options">
+                        <h4><i class="fas fa-cogs"></i> 推理选项</h4>
+                        <div class="option-group">
+                            <label>
+                                <input type="radio" name="inferenceMode" value="federated" checked>
+                                <span>联邦模型推理</span>
+                                <small style="color: #718096;">使用训练完成的联邦模型</small>
+                            </label>
+                            <label>
+                                <input type="radio" name="inferenceMode" value="fast">
+                                <span>快速模式</span>
+                                <small style="color: #718096;">使用预训练模型快速推理</small>
+                            </label>
+                        </div>
+                        <label>
+                            <input type="checkbox" id="fastModeCheckbox">
+                            <span>启用快速推理</span>
+                            <small style="color: #718096;">减少计算时间，可能略微影响精度</small>
+                        </label>
+                    </div>
+                </div>
+
+                <div class="inference-file-list" id="inferenceFileList">
+                    <p style="color: #718096; text-align: center;">暂无上传的推理文件</p>
+                </div>
+
+                <div class="inference-status" id="inferenceStatus">
+                    <div>
+                        <i class="fas fa-spinner fa-spin"></i>
+                        <span id="inferenceStatusText">正在初始化推理...</span>
+                    </div>
+                    <div class="inference-progress">
+                        <div class="inference-progress-fill" id="inferenceProgressBar" style="width: 0%"></div>
+                    </div>
+                    <div id="inferenceProgressText">0%</div>
+                </div>
+
+                <div style="text-align: center; margin: 1.5rem 0;">
+                    <button id="runInferenceBtn" class="btn-primary" onclick="runInference()" disabled>
+                        <i class="fas fa-brain"></i> 开始推理
+                    </button>
+                    <button class="btn-secondary" onclick="clearAllFiles()" style="margin-left: 10px;">
+                        <i class="fas fa-trash-alt"></i> 清空文件
+                    </button>
+                </div>
+
+                <div class="inference-result" id="inferenceResult" style="display: none;">
+                    <h4><i class="fas fa-chart-bar"></i> 推理结果</h4>
+                    <img id="resultImage" src="" alt="推理结果" style="display: none;">
+                    <p id="resultText" style="color: #718096;"></p>
+                </div>
+            </div>
         </div>
 
         <!-- 服务器日志 -->
@@ -463,17 +930,24 @@
             const progressElement = document.getElementById('trainingProgress');
             const progressBar = document.getElementById('progressBar');
             const startBtn = document.getElementById('startTrainingBtn');
+            const inferenceBtn = document.getElementById('inferenceBtn');
 
             if (status.is_training) {
                 statusElement.innerHTML = '<span class="status-indicator status-active"></span>训练中';
                 indicatorElement.className = 'status-indicator status-active';
                 startBtn.disabled = true;
                 startBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>训练进行中...';
+                inferenceBtn.style.display = 'none'; // 训练时隐藏推理按钮
             } else {
                 statusElement.innerHTML = '<span class="status-indicator status-inactive"></span>待机';
                 indicatorElement.className = 'status-indicator status-inactive';
                 startBtn.disabled = false;
                 startBtn.innerHTML = '<i class="fas fa-play"></i>开始联邦学习训练';
+                
+                // 如果训练已完成（进度100%），显示推理按钮
+                if (status.progress === 100 && status.end_time) {
+                    inferenceBtn.style.display = 'inline-block';
+                }
             }
 
             roundElement.textContent = `${status.current_round}/${status.total_rounds}`;
@@ -616,7 +1090,449 @@
                 updateInterval = setInterval(fetchStatus, 5000);
                 fetchStatus(); // 立即获取一次
             }
+
+            // 初始化推理功能
+            loadInferenceFiles();
         });
+
+        // 推理功能相关JavaScript
+        let selectedInferenceFile = null;
+        let inferenceStatusInterval = null;
+
+        // 处理推理文件上传
+        async function handleInferenceFileUpload(event) {
+            const files = event.target.files;
+            if (!files || files.length === 0) return;
+
+            showUploadProgress();
+            const formData = new FormData();
+            
+            // 添加所有文件到FormData
+            for (let i = 0; i < files.length; i++) {
+                formData.append('files', files[i]);
+                addUploadProgressItem(files[i].name, 'uploading');
+            }
+
+            try {
+                const response = await fetch('/api/server/upload_inference_file', {
+                    method: 'POST',
+                    body: formData
+                });
+
+                const result = await response.json();
+
+                if (response.ok) {
+                    showNotification(result.message, 'success');
+                    loadInferenceFiles(); // 重新加载文件列表
+                    
+                    // 更新上传进度
+                    if (result.uploaded_files) {
+                        result.uploaded_files.forEach(filename => {
+                            updateUploadProgressItem(filename, 'success');
+                        });
+                    }
+                    
+                    if (result.errors && result.errors.length > 0) {
+                        result.errors.forEach(error => {
+                            showNotification(error, 'warning');
+                        });
+                    }
+                } else {
+                    showNotification(result.error || '文件上传失败', 'error');
+                    // 将所有文件标记为失败
+                    for (let i = 0; i < files.length; i++) {
+                        updateUploadProgressItem(files[i].name, 'error');
+                    }
+                }
+            } catch (error) {
+                showNotification('上传错误: ' + error.message, 'error');
+                // 将所有文件标记为失败
+                for (let i = 0; i < files.length; i++) {
+                    updateUploadProgressItem(files[i].name, 'error');
+                }
+            }
+
+            // 清空文件输入
+            event.target.value = '';
+            
+            // 3秒后隐藏上传进度
+            setTimeout(hideUploadProgress, 3000);
+        }
+
+        // 加载推理文件列表
+        async function loadInferenceFiles() {
+            try {
+                const response = await fetch('/api/server/list_inference_files');
+                const result = await response.json();
+
+                // 缓存文件列表数据
+                window.currentFileList = result.files || [];
+
+                const fileList = document.getElementById('inferenceFileList');
+                
+                if (result.files && result.files.length > 0) {
+                    fileList.innerHTML = result.files.map(file => `
+                        <div class="inference-file-item" onclick="selectInferenceFile('${file.name}', this)">
+                            <div class="file-info">
+                                <div class="file-name">
+                                    <strong>${file.name}</strong>
+                                    ${file.has_pair ? '<i class="fas fa-check-circle" style="color: #48bb78; margin-left: 8px;" title="文件对完整"></i>' : '<i class="fas fa-exclamation-triangle" style="color: #ed8936; margin-left: 8px;" title="缺少配对文件"></i>'}
+                                </div>
+                                <div class="file-details">
+                                    <span>大小: ${(file.total_size / 1024 / 1024).toFixed(2)} MB</span>
+                                    <span>上传时间: ${file.upload_time}</span>
+                                    ${file.has_pair ? `<span>配对文件: ${file.raw_file}</span>` : '<span style="color: #ed8936;">缺少.raw文件</span>'}
+                                </div>
+                                <div class="file-status">
+                                    <div class="status-indicator-small ${file.has_pair ? 'status-complete' : 'status-incomplete'}"></div>
+                                    <span>${file.has_pair ? '文件对完整' : '文件对不完整'}</span>
+                                </div>
+                            </div>
+                            <div class="file-actions">
+                                <button class="btn-danger btn-small" onclick="event.stopPropagation(); deleteInferenceFile('${file.name}')" title="删除文件对">
+                                    <i class="fas fa-trash"></i>
+                                </button>
+                                <i class="file-type-icon fas fa-file-medical"></i>
+                            </div>
+                        </div>
+                    `).join('');
+                } else {
+                    fileList.innerHTML = '<p style="color: #718096; text-align: center;">暂无上传的推理文件</p>';
+                }
+            } catch (error) {
+                console.error('加载文件列表失败:', error);
+            }
+        }
+
+        // 删除推理文件
+        async function deleteInferenceFile(filename) {
+            if (!confirm(`确定要删除文件对 "${filename}" 吗？这将同时删除对应的.raw文件。`)) {
+                return;
+            }
+
+            try {
+                const response = await fetch('/api/server/delete_inference_file', {
+                    method: 'DELETE',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ filename: filename })
+                });
+
+                const result = await response.json();
+
+                if (response.ok) {
+                    showNotification(result.message, 'success');
+                    loadInferenceFiles(); // 重新加载文件列表
+                    
+                    // 如果删除的是当前选中的文件，清除选择
+                    if (selectedInferenceFile === filename) {
+                        selectedInferenceFile = null;
+                        document.getElementById('runInferenceBtn').disabled = true;
+                    }
+                } else {
+                    showNotification(result.error || '删除失败', 'error');
+                }
+            } catch (error) {
+                showNotification('删除错误: ' + error.message, 'error');
+            }
+        }
+
+        // 拖拽上传功能
+        function handleDragOver(e) {
+            e.preventDefault();
+            e.stopPropagation();
+        }
+
+        function handleDragEnter(e) {
+            e.preventDefault();
+            e.stopPropagation();
+            e.currentTarget.classList.add('dragover');
+        }
+
+        function handleDragLeave(e) {
+            e.preventDefault();
+            e.stopPropagation();
+            e.currentTarget.classList.remove('dragover');
+        }
+
+        function handleFileDrop(e) {
+            e.preventDefault();
+            e.stopPropagation();
+            e.currentTarget.classList.remove('dragover');
+            
+            const files = e.dataTransfer.files;
+            if (files.length > 0) {
+                // 模拟文件输入
+                const fileInput = document.getElementById('inferenceFileInput');
+                fileInput.files = files;
+                handleInferenceFileUpload({ target: fileInput });
+            }
+        }
+
+        // 上传进度相关函数
+        function showUploadProgress() {
+            document.getElementById('uploadProgress').style.display = 'block';
+            document.getElementById('uploadProgressList').innerHTML = '';
+        }
+
+        function hideUploadProgress() {
+            document.getElementById('uploadProgress').style.display = 'none';
+        }
+
+        function addUploadProgressItem(filename, status) {
+            const progressList = document.getElementById('uploadProgressList');
+            const progressItem = document.createElement('div');
+            progressItem.className = 'progress-item';
+            progressItem.id = `progress-${filename}`;
+            progressItem.innerHTML = `
+                <div class="progress-filename">${filename}</div>
+                <div class="progress-status ${status === 'success' ? 'progress-success' : status === 'error' ? 'progress-error' : ''}">
+                    ${status === 'uploading' ? '<i class="fas fa-spinner fa-spin"></i> 上传中...' : 
+                      status === 'success' ? '<i class="fas fa-check"></i> 成功' : 
+                      status === 'error' ? '<i class="fas fa-times"></i> 失败' : status}
+                </div>
+            `;
+            progressList.appendChild(progressItem);
+        }
+
+        function updateUploadProgressItem(filename, status) {
+            const progressItem = document.getElementById(`progress-${filename}`);
+            if (progressItem) {
+                const statusElement = progressItem.querySelector('.progress-status');
+                statusElement.className = `progress-status ${status === 'success' ? 'progress-success' : 'progress-error'}`;
+                statusElement.innerHTML = status === 'success' ? '<i class="fas fa-check"></i> 成功' : '<i class="fas fa-times"></i> 失败';
+            }
+        }
+
+        // 清空所有文件
+        async function clearAllFiles() {
+            if (!confirm('确定要删除所有推理文件吗？')) {
+                return;
+            }
+
+            try {
+                const response = await fetch('/api/server/list_inference_files');
+                const result = await response.json();
+                
+                if (result.files && result.files.length > 0) {
+                    for (const file of result.files) {
+                        await deleteInferenceFile(file.name);
+                    }
+                }
+            } catch (error) {
+                showNotification('清空文件时出错: ' + error.message, 'error');
+            }
+        }
+
+        // 刷新文件列表
+        function refreshFileList() {
+            showNotification('正在刷新文件列表...', 'info');
+            loadInferenceFiles();
+        }
+
+        // 选择推理文件
+        function selectInferenceFile(filename, element) {
+            // 移除之前的选中状态
+            document.querySelectorAll('.inference-file-item').forEach(item => {
+                item.classList.remove('selected');
+            });
+
+            // 添加选中状态
+            element.classList.add('selected');
+            selectedInferenceFile = filename;
+
+            // 检查文件对是否完整
+            const fileData = getFileData(filename);
+            if (fileData && fileData.has_pair) {
+                // 启用运行按钮
+                document.getElementById('runInferenceBtn').disabled = false;
+                showNotification(`已选择文件: ${filename}`, 'info');
+            } else {
+                // 禁用运行按钮
+                document.getElementById('runInferenceBtn').disabled = true;
+                showNotification(`文件对不完整，无法进行推理: ${filename}`, 'warning');
+            }
+        }
+
+        // 获取文件数据
+        function getFileData(filename) {
+            // 这里应该从最近一次加载的文件列表中获取数据
+            // 为了简化，我们可以重新获取，但在实际应用中应该缓存这些数据
+            return window.currentFileList ? window.currentFileList.find(f => f.name === filename) : null;
+        }
+
+        // 运行推理
+        async function runInference() {
+            if (!selectedInferenceFile) {
+                showNotification('请先选择一个推理文件', 'error');
+                return;
+            }
+
+            const inferenceMode = document.querySelector('input[name="inferenceMode"]:checked').value;
+            const fastMode = document.getElementById('fastModeCheckbox').checked;
+
+            const requestData = {
+                filename: selectedInferenceFile,
+                use_federated: inferenceMode === 'federated',
+                fast_mode: fastMode
+            };
+
+            try {
+                const response = await fetch('/api/server/run_inference', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(requestData)
+                });
+
+                const result = await response.json();
+
+                if (response.ok) {
+                    showNotification('推理已启动', 'success');
+                    
+                    // 显示推理状态面板
+                    document.getElementById('inferenceStatus').style.display = 'block';
+                    document.getElementById('runInferenceBtn').disabled = true;
+                    
+                    // 开始监控推理状态
+                    inferenceStatusInterval = setInterval(checkInferenceStatus, 2000);
+                    checkInferenceStatus(); // 立即检查一次
+                    
+                } else {
+                    showNotification(result.error || '推理启动失败', 'error');
+                }
+            } catch (error) {
+                showNotification('请求错误: ' + error.message, 'error');
+            }
+        }
+
+        // 检查推理状态
+        async function checkInferenceStatus() {
+            try {
+                const response = await fetch('/api/server/get_inference_status');
+                const status = await response.json();
+
+                updateInferenceStatus(status);
+
+                // 如果推理完成，停止监控
+                if (!status.is_running) {
+                    if (inferenceStatusInterval) {
+                        clearInterval(inferenceStatusInterval);
+                        inferenceStatusInterval = null;
+                    }
+
+                    // 重新启用运行按钮
+                    document.getElementById('runInferenceBtn').disabled = false;
+
+                    // 如果有结果图像，显示它
+                    if (status.result_image) {
+                        displayInferenceResult(status.result_image);
+                    }
+
+                    // 如果有错误，显示错误信息
+                    if (status.error) {
+                        showNotification('推理失败: ' + status.error, 'error');
+                        document.getElementById('inferenceStatus').style.display = 'none';
+                    }
+                }
+            } catch (error) {
+                console.error('获取推理状态失败:', error);
+            }
+        }
+
+        // 更新推理状态显示
+        function updateInferenceStatus(status) {
+            const statusText = document.getElementById('inferenceStatusText');
+            const progressBar = document.getElementById('inferenceProgressBar');
+            const progressText = document.getElementById('inferenceProgressText');
+
+            statusText.textContent = status.current_step || '推理中...';
+            progressBar.style.width = status.progress + '%';
+            progressText.textContent = status.progress + '%';
+
+            // 如果推理完成，隐藏状态面板
+            if (!status.is_running && status.progress === 100) {
+                setTimeout(() => {
+                    document.getElementById('inferenceStatus').style.display = 'none';
+                }, 2000);
+            }
+        }
+
+        // 显示推理结果
+        function displayInferenceResult(imageData) {
+            const resultDiv = document.getElementById('inferenceResult');
+            const resultImage = document.getElementById('resultImage');
+            const resultText = document.getElementById('resultText');
+
+            resultImage.src = imageData;
+            resultImage.style.display = 'block';
+            resultText.textContent = '推理完成！点击图像可查看大图。';
+            resultDiv.style.display = 'block';
+
+            // 添加点击图像放大功能
+            resultImage.onclick = function() {
+                const newWindow = window.open('', '_blank');
+                newWindow.document.write(`
+                    <html>
+                        <head>
+                            <title>推理结果 - ${selectedInferenceFile}</title>
+                            <style>
+                                body { 
+                                    margin: 0; 
+                                    padding: 20px; 
+                                    background: #f0f0f0; 
+                                    display: flex; 
+                                    justify-content: center; 
+                                    align-items: center; 
+                                    min-height: 100vh;
+                                }
+                                img { 
+                                    max-width: 100%; 
+                                    height: auto; 
+                                    border-radius: 8px; 
+                                    box-shadow: 0 4px 8px rgba(0,0,0,0.3);
+                                }
+                                h1 {
+                                    position: fixed;
+                                    top: 20px;
+                                    left: 20px;
+                                    color: #333;
+                                    font-family: Arial, sans-serif;
+                                }
+                            </style>
+                        </head>
+                        <body>
+                            <h1>推理结果: ${selectedInferenceFile}</h1>
+                            <img src="${imageData}" alt="推理结果">
+                        </body>
+                    </html>
+                `);
+            };
+
+            showNotification('推理完成！结果已显示在下方', 'success');
+        }
+
+        // 滚动到推理功能区域
+        function scrollToInference() {
+            const inferenceSection = document.querySelector('.card h2').parentElement.parentElement;
+            const cards = document.querySelectorAll('.card');
+            
+            // 查找推理功能卡片
+            for (let card of cards) {
+                const header = card.querySelector('h2');
+                if (header && header.textContent.includes('模型推理')) {
+                    card.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                    // 添加高亮效果
+                    card.style.border = '2px solid #667eea';
+                    setTimeout(() => {
+                        card.style.border = '';
+                    }, 2000);
+                    break;
+                }
+            }
+        }
     </script>
 </body>
 </html>

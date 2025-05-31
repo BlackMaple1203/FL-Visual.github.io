@@ -75,6 +75,7 @@ def show_predicted_nodules(
     model_path="best_lung_nodule_model.pth",
     confidence_threshold=0.3,
     max_show_num=5,
+    save_result=False,
 ):
     """
     使用训练好的模型预测并显示结节
@@ -84,6 +85,10 @@ def show_predicted_nodules(
         model_path: 训练好的模型路径
         confidence_threshold: 置信度阈值
         max_show_num: 最大显示数量
+        save_result: 是否保存结果图像
+
+    Returns:
+        如果save_result为True，返回保存的文件路径
     """
     print(f"正在加载图像: {image_path}")
 
@@ -107,8 +112,9 @@ def show_predicted_nodules(
     if not filtered_nodules:
         print("未检测到高置信度的结节，显示概率图...")
         # 显示概率最高的区域
-        visualize_probability_map(original_image, probability_map, max_show_num=3)
-        return
+        return visualize_probability_map(
+            original_image, probability_map, max_show_num=3, save_result=save_result
+        )
 
     # 转换世界坐标为体素坐标
     nodule_voxels = []
@@ -216,10 +222,27 @@ def visualize_nodules_with_model(ct_scan, probability_map, nodules, max_show_num
         axes[2, i].axis("off")
 
     plt.tight_layout()
-    plt.show()
+
+    if save_result:
+        # 保存到临时文件
+        import tempfile
+        import time
+
+        timestamp = int(time.time())
+        save_file = os.path.join(
+            tempfile.gettempdir(), f"fast_inference_result_{timestamp}.png"
+        )
+        plt.savefig(save_file, dpi=150, bbox_inches="tight")
+        plt.close()  # 关闭图形以释放内存
+        return save_file
+    else:
+        plt.show()
+        return None
 
 
-def visualize_probability_map(ct_scan, probability_map, max_show_num=3):
+def visualize_probability_map(
+    ct_scan, probability_map, max_show_num=3, save_result=False
+):
     """
     可视化概率图中的高概率区域
 
@@ -227,6 +250,10 @@ def visualize_probability_map(ct_scan, probability_map, max_show_num=3):
         ct_scan: CT扫描数据
         probability_map: 概率图
         max_show_num: 最大显示切片数
+        save_result: 是否保存结果图像
+
+    Returns:
+        如果save_result为True，返回保存的文件路径
     """
     # 找到概率最高的切片
     slice_max_probs = [
@@ -254,7 +281,22 @@ def visualize_probability_map(ct_scan, probability_map, max_show_num=3):
 
     plt.colorbar(prob_overlay, ax=axes[1, :], shrink=0.6, label="Nodule Probability")
     plt.tight_layout()
-    plt.show()
+
+    if save_result:
+        # 保存到临时文件
+        import tempfile
+        import time
+
+        timestamp = int(time.time())
+        save_file = os.path.join(
+            tempfile.gettempdir(), f"fast_inference_result_{timestamp}.png"
+        )
+        plt.savefig(save_file, dpi=150, bbox_inches="tight")
+        plt.close()  # 关闭图形以释放内存
+        return save_file
+    else:
+        plt.show()
+        return None
 
 
 def demo_with_sample_data():

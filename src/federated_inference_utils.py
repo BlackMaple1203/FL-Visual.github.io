@@ -13,10 +13,14 @@ from scipy import ndimage
 from scipy.ndimage import label, generate_binary_structure
 import warnings
 import matplotlib
+
 matplotlib.use("Agg")  # 使用非GUI后端
 from train_simple_model import Simple3DUNet
 
 warnings.filterwarnings("ignore")
+
+# 添加安全的全局对象，用于解决PyTorch 2.6的权限问题
+torch.serialization.add_safe_globals([np.core.multiarray.scalar])
 
 
 class FederatedLungNodulePredictor:
@@ -41,7 +45,11 @@ class FederatedLungNodulePredictor:
 
         if os.path.exists(model_path):
             print(f"加载联邦学习模型: {model_path}")
-            checkpoint = torch.load(model_path, map_location=self.device, weights_only=False)
+            # 使用安全的全局对象上下文管理器
+            with torch.serialization.safe_globals([np.core.multiarray.scalar]):
+                checkpoint = torch.load(
+                    model_path, map_location=self.device, weights_only=False
+                )
 
             # 检查是否是联邦学习保存的格式
             if "model_state_dict" in checkpoint:
@@ -238,9 +246,68 @@ class FederatedLungNodulePredictor:
 
         return nodules
 
+    def predict_fast(
+        self, image_path, patch_size=(32, 32, 32), confidence_threshold=0.5
+    ):
+        """
+        快速预测模式 - 使用更小的patch和更大的步长以提高速度
+
+        Args:
+            image_path: 图像路径
+            patch_size: 预测块大小（较小以提高速度）
+            confidence_threshold: 置信度阈值（较高以减少误检）
+
+        Returns:
+            tuple: (nodules, probability_map, original_image, spacing, origin)
+        """
+        # 加载图像
+        image = sitk.ReadImage(image_path)
+        image_array = sitk.GetArrayFromImage(image)
+        spacing = image.GetSpacing()
+        origin = image.GetOrigin()
+
+        print(f"快速模式 - 图像形状: {image_array.shape}")
+        print(f"快速模式 - 图像间距: {spacing}")
+
+        # 对图像进行下采样以提高速度
+        downsample_factor = 2
+        downsampled_shape = tuple(s // downsample_factor for s in image_array.shape)
+        downsampled_image = ndimage.zoom(image_array, 1 / downsample_factor, order=1)
+
+        # 标准化图像
+        normalized_image = self.normalize_image(downsampled_image)
+
+        # 快速预测（使用更大的步长）
+        stride = [s for s in patch_size]  # 无重叠以提高速度
+        probability_map_downsampled = self.sliding_window_prediction(
+            normalized_image, patch_size, stride
+        )
+
+        # 将概率图上采样回原始尺寸
+        probability_map = ndimage.zoom(
+            probability_map_downsampled, downsample_factor, order=1
+        )
+
+        # 确保概率图与原始图像尺寸匹配
+        if probability_map.shape != image_array.shape:
+            probability_map = ndimage.zoom(
+                probability_map,
+                [s1 / s2 for s1, s2 in zip(image_array.shape, probability_map.shape)],
+                order=1,
+            )
+
+        # 检测结节
+        nodules = self.detect_nodules(
+            probability_map, spacing, origin, threshold=confidence_threshold
+        )
+
+        print(f"快速模式完成 - 检测到 {len(nodules)} 个候选结节")
+
+        return nodules, probability_map, image_array, spacing, origin
+
 
 def predict_with_federated_model(
-    image_path, model_path="best_federated_lung_nodule_model.pth"
+    image_path, model_path="./src/best_federated_lung_nodule_model.pth", fast_mode=False
 ):
     """
     使用联邦学习模型进行预测的便捷函数
@@ -248,12 +315,18 @@ def predict_with_federated_model(
     Args:
         image_path: CT图像路径
         model_path: 联邦学习模型路径
+        fast_mode: 是否使用快速模式（减少计算时间）
 
     Returns:
         预测结果
     """
     predictor = FederatedLungNodulePredictor(model_path)
-    nodules, prob_map, image, spacing, origin = predictor.predict(image_path)
+
+    if fast_mode:
+        # 快速模式：降低分辨率和减少处理步骤
+        nodules, prob_map, image, spacing, origin = predictor.predict_fast(image_path)
+    else:
+        nodules, prob_map, image, spacing, origin = predictor.predict(image_path)
 
     print(f"检测到 {len(nodules)} 个结节候选:")
     for i, (x, y, z, conf) in enumerate(nodules):
@@ -263,7 +336,13 @@ def predict_with_federated_model(
 
 
 def visualize_federated_results(
-    image_array, probability_map, nodules, spacing, origin, max_slices=3
+    image_array,
+    probability_map,
+    nodules,
+    spacing,
+    origin,
+    max_slices=3,
+    save_path=False,
 ):
     """
     可视化联邦学习预测结果，正确标记肿瘤位置
@@ -275,11 +354,16 @@ def visualize_federated_results(
         spacing: 图像间距
         origin: 图像原点
         max_slices: 最大显示切片数
+        save_path: 是否保存图像，如果为True则返回保存路径
+
+    Returns:
+        如果save_path为True，返回保存的文件路径
     """
     if len(nodules) == 0:
         print("未检测到结节，显示概率最高的切片")
-        visualize_probability_map_only(image_array, probability_map, max_slices)
-        return
+        return visualize_probability_map_only(
+            image_array, probability_map, max_slices, save_path
+        )
 
     # 转换世界坐标为体素坐标
     nodule_voxels = []
@@ -377,10 +461,27 @@ def visualize_federated_results(
     plt.colorbar(prob_overlay, ax=axes[1, :], shrink=0.6, label="结节概率")
     plt.suptitle("联邦学习模型预测结果", fontsize=16)
     plt.tight_layout()
-    plt.show()
+
+    if save_path:
+        # 保存到临时文件
+        import tempfile
+        import time
+
+        timestamp = int(time.time())
+        save_file = os.path.join(
+            tempfile.gettempdir(), f"federated_inference_result_{timestamp}.png"
+        )
+        plt.savefig(save_file, dpi=150, bbox_inches="tight")
+        plt.close()  # 关闭图形以释放内存
+        return save_file
+    else:
+        plt.show()
+        return None
 
 
-def visualize_probability_map_only(image_array, probability_map, max_slices=3):
+def visualize_probability_map_only(
+    image_array, probability_map, max_slices=3, save_path=False
+):
     """
     当没有检测到结节时，可视化概率最高的区域
 
@@ -388,6 +489,10 @@ def visualize_probability_map_only(image_array, probability_map, max_slices=3):
         image_array: 原始CT图像
         probability_map: 概率图
         max_slices: 最大显示切片数
+        save_path: 是否保存图像，如果为True则返回保存路径
+
+    Returns:
+        如果save_path为True，返回保存的文件路径
     """
     # 找到概率最高的切片
     slice_max_probs = [
@@ -416,7 +521,22 @@ def visualize_probability_map_only(image_array, probability_map, max_slices=3):
     plt.colorbar(prob_overlay, ax=axes[1, :], shrink=0.6, label="结节概率")
     plt.suptitle("联邦学习模型预测结果", fontsize=16)
     plt.tight_layout()
-    plt.show()
+
+    if save_path:
+        # 保存到临时文件
+        import tempfile
+        import time
+
+        timestamp = int(time.time())
+        save_file = os.path.join(
+            tempfile.gettempdir(), f"federated_inference_result_{timestamp}.png"
+        )
+        plt.savefig(save_file, dpi=150, bbox_inches="tight")
+        plt.close()  # 关闭图形以释放内存
+        return save_file
+    else:
+        plt.show()
+        return None
 
 
 def demo_federated_prediction():

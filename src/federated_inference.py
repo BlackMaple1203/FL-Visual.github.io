@@ -34,5 +34,5 @@ def run_inference(image_path, use_federated=True):
 
 
 if __name__ == "__main__":
-    file_path = "./LUNA16/subset0/1.3.6.1.4.1.14519.5.2.1.6279.6001.105756658031515062000744821260.mhd"
+    file_path = "../uploads/server_inference/1.3.6.1.4.1.14519.5.2.1.6279.6001.109002525524522225658609808059.mhd"
     run_inference(file_path, use_federated=True)

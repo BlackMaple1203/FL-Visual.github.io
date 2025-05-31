@@ -8,17 +8,24 @@ import queue
 import io
 import sys
 import builtins
+import base64
 
 # 从您现有的脚本导入训练函数
 # 确保 src 目录在 Python 路径中，或者调整导入方式
 sys.path.append(os.path.join(os.path.dirname(__file__), "src"))
 from federated_training import train_federated_model
+from federated_inference import run_inference
 
 app = Flask(__name__)
-app.secret_key = "your_secret_key"  # 请更改为强密钥
+app.secret_key = "123456"
 UPLOAD_FOLDER = os.path.join(os.path.dirname(os.path.abspath(__file__)), "uploads")
 if not os.path.exists(UPLOAD_FOLDER):
     os.makedirs(UPLOAD_FOLDER)
+
+# 推理文件上传目录
+INFERENCE_UPLOAD_FOLDER = os.path.join(UPLOAD_FOLDER, "server_inference")
+if not os.path.exists(INFERENCE_UPLOAD_FOLDER):
+    os.makedirs(INFERENCE_UPLOAD_FOLDER)
 
 # 模拟用户数据库
 users = {
@@ -45,6 +52,18 @@ training_status = {
 
 # 设置全局变量，让训练函数能够访问
 builtins.app_training_status = training_status
+
+# 全局推理状态
+inference_status = {
+    "is_running": False,
+    "progress": 0,
+    "current_step": "",
+    "result_image": None,
+    "error": None,
+    "start_time": None,
+    "end_time": None,
+    "uploaded_files": [],
+}
 
 # 日志队列
 server_logs = queue.Queue(maxsize=1000)
@@ -459,6 +478,345 @@ def initialize_client_data_status():
                 print(f"❌ {username} 的数据目录不存在: {client_data_dir}")
 
 
+# 推理相关API端点
+@app.route("/api/server/upload_inference_file", methods=["POST"])
+def upload_inference_file():
+    """上传推理文件（支持多文件上传）"""
+    if "username" not in session or session["role"] != "server":
+        return jsonify({"error": "未授权"}), 403
+
+    files = request.files.getlist("files")
+    if not files or len(files) == 0:
+        return jsonify({"error": "未选择文件"}), 400
+
+    uploaded_files = []
+    errors = []
+
+    # 验证文件类型和配对
+    mhd_files = []
+    raw_files = []
+
+    for file in files:
+        if file.filename == "":
+            continue
+
+        if file.filename.lower().endswith(".mhd"):
+            mhd_files.append(file)
+        elif file.filename.lower().endswith(".raw"):
+            raw_files.append(file)
+        else:
+            errors.append(f"不支持的文件类型: {file.filename}")
+
+    if not mhd_files:
+        return jsonify({"error": "必须包含至少一个.mhd文件"}), 400
+
+    # 验证每个.mhd文件都有对应的.raw文件
+    for mhd_file in mhd_files:
+        base_name = os.path.splitext(mhd_file.filename)[0]
+        raw_filename = base_name + ".raw"
+
+        # 查找对应的.raw文件
+        corresponding_raw = None
+        for raw_file in raw_files:
+            if raw_file.filename == raw_filename:
+                corresponding_raw = raw_file
+                break
+
+        if not corresponding_raw:
+            errors.append(f"缺少对应的.raw文件: {raw_filename}")
+            continue
+
+        # 上传文件对
+        try:
+            # 处理文件名冲突
+            mhd_filename = mhd_file.filename
+            raw_filename = corresponding_raw.filename
+
+            counter = 1
+            base_name = os.path.splitext(mhd_filename)[0]
+
+            while os.path.exists(
+                os.path.join(INFERENCE_UPLOAD_FOLDER, mhd_filename)
+            ) or os.path.exists(os.path.join(INFERENCE_UPLOAD_FOLDER, raw_filename)):
+                mhd_filename = f"{base_name}_{counter}.mhd"
+                raw_filename = f"{base_name}_{counter}.raw"
+                counter += 1
+
+            # 保存.mhd文件
+            mhd_path = os.path.join(INFERENCE_UPLOAD_FOLDER, mhd_filename)
+            mhd_file.save(mhd_path)
+
+            # 保存.raw文件
+            raw_path = os.path.join(INFERENCE_UPLOAD_FOLDER, raw_filename)
+            corresponding_raw.save(raw_path)
+
+            # 只将.mhd文件添加到状态中（推理时使用）
+            inference_status["uploaded_files"].append(
+                {
+                    "name": mhd_filename,
+                    "path": mhd_path,
+                    "raw_file": raw_filename,
+                    "upload_time": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                }
+            )
+
+            uploaded_files.extend([mhd_filename, raw_filename])
+            add_server_log(f"推理文件对上传成功: {mhd_filename}, {raw_filename}")
+
+        except Exception as e:
+            errors.append(f"上传文件对失败 {mhd_file.filename}: {str(e)}")
+
+    if not uploaded_files and errors:
+        return jsonify({"error": f"上传失败: {'; '.join(errors)}"}), 500
+
+    response_message = f"成功上传 {len(uploaded_files)} 个文件"
+    if errors:
+        response_message += f" (部分错误: {'; '.join(errors)})"
+
+    return jsonify(
+        {
+            "message": response_message,
+            "uploaded_files": uploaded_files,
+            "errors": errors,
+        }
+    )
+
+
+@app.route("/api/server/list_inference_files", methods=["GET"])
+def list_inference_files():
+    """获取已上传的推理文件列表"""
+    if "username" not in session or session["role"] != "server":
+        return jsonify({"error": "未授权"}), 403
+
+    files = []
+    if os.path.exists(INFERENCE_UPLOAD_FOLDER):
+        for filename in os.listdir(INFERENCE_UPLOAD_FOLDER):
+            if filename.lower().endswith(".mhd"):
+                file_path = os.path.join(INFERENCE_UPLOAD_FOLDER, filename)
+                stat = os.stat(file_path)
+
+                # 检查对应的.raw文件是否存在
+                base_name = os.path.splitext(filename)[0]
+                raw_filename = base_name + ".raw"
+                raw_path = os.path.join(INFERENCE_UPLOAD_FOLDER, raw_filename)
+                has_raw_file = os.path.exists(raw_path)
+
+                raw_size = 0
+                if has_raw_file:
+                    raw_stat = os.stat(raw_path)
+                    raw_size = raw_stat.st_size
+
+                files.append(
+                    {
+                        "name": filename,
+                        "path": file_path,
+                        "size": stat.st_size,
+                        "raw_file": raw_filename if has_raw_file else None,
+                        "raw_size": raw_size,
+                        "total_size": stat.st_size + raw_size,
+                        "has_pair": has_raw_file,
+                        "upload_time": datetime.fromtimestamp(stat.st_mtime).strftime(
+                            "%Y-%m-%d %H:%M:%S"
+                        ),
+                    }
+                )
+
+    return jsonify({"files": files})
+
+
+@app.route("/api/server/run_inference", methods=["POST"])
+def run_inference_api():
+    """运行推理"""
+    if "username" not in session or session["role"] != "server":
+        return jsonify({"error": "未授权"}), 403
+
+    if inference_status["is_running"]:
+        return jsonify({"error": "推理正在运行中"}), 400
+
+    data = request.get_json()
+    filename = data.get("filename")
+    use_federated = data.get("use_federated", True)
+    fast_mode = data.get("fast_mode", False)
+
+    if not filename:
+        return jsonify({"error": "未指定文件名"}), 400
+
+    file_path = os.path.join(INFERENCE_UPLOAD_FOLDER, filename)
+    if not os.path.exists(file_path):
+        return jsonify({"error": "MHD文件不存在"}), 404
+
+    # 检查对应的.raw文件是否存在
+    base_name = os.path.splitext(filename)[0]
+    raw_filename = base_name + ".raw"
+    raw_path = os.path.join(INFERENCE_UPLOAD_FOLDER, raw_filename)
+    if not os.path.exists(raw_path):
+        return jsonify({"error": f"对应的RAW文件不存在: {raw_filename}"}), 404
+
+    # 重置推理状态
+    inference_status.update(
+        {
+            "is_running": True,
+            "progress": 0,
+            "current_step": "初始化推理...",
+            "result_image": None,
+            "error": None,
+            "start_time": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            "end_time": None,
+        }
+    )
+
+    def run_inference_thread():
+        try:
+            add_server_log(f"开始推理: {filename}")
+            inference_status["current_step"] = "加载模型..."
+            inference_status["progress"] = 10
+
+            # 导入推理函数
+            if use_federated:
+                from federated_inference_utils import (
+                    predict_with_federated_model,
+                    visualize_federated_results,
+                )
+
+                inference_status["current_step"] = "使用联邦模型进行预测..."
+                inference_status["progress"] = 30
+
+                # 运行推理，支持快速模式
+                nodules, prob_map, image, spacing, origin = (
+                    predict_with_federated_model(file_path, fast_mode=fast_mode)
+                )
+
+                inference_status["current_step"] = "生成可视化结果..."
+                inference_status["progress"] = 70
+
+                # 生成结果图像并保存为base64
+                result_path = visualize_federated_results(
+                    image, prob_map, nodules, spacing, origin, save_path=True
+                )
+
+            else:
+                from show_nodules import show_predicted_nodules
+
+                inference_status["current_step"] = "使用快速模式进行预测..."
+                inference_status["progress"] = 50
+
+                result_path = show_predicted_nodules(
+                    file_path, confidence_threshold=0.3, save_result=True
+                )
+
+            # 读取结果图像并转换为base64
+            if result_path and os.path.exists(result_path):
+                with open(result_path, "rb") as img_file:
+                    img_data = img_file.read()
+                    base64_image = base64.b64encode(img_data).decode("utf-8")
+                    inference_status["result_image"] = (
+                        f"data:image/png;base64,{base64_image}"
+                    )
+
+            inference_status["current_step"] = "推理完成"
+            inference_status["progress"] = 100
+            inference_status["is_running"] = False
+            inference_status["end_time"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+            add_server_log(f"推理完成: {filename}")
+
+        except Exception as e:
+            inference_status.update(
+                {
+                    "is_running": False,
+                    "error": str(e),
+                    "end_time": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                }
+            )
+            add_server_log(f"推理失败: {str(e)}")
+
+    # 在后台线程中运行推理
+    inference_thread = threading.Thread(target=run_inference_thread)
+    inference_thread.daemon = True
+    inference_thread.start()
+
+    return jsonify({"message": "推理已启动"})
+
+
+@app.route("/api/server/get_inference_status", methods=["GET"])
+def get_inference_status():
+    """获取推理状态"""
+    if "username" not in session or session["role"] != "server":
+        return jsonify({"error": "未授权"}), 403
+
+    return jsonify(inference_status)
+
+
+@app.route("/api/server/get_inference_result", methods=["GET"])
+def get_inference_result():
+    """获取推理结果图像"""
+    if "username" not in session or session["role"] != "server":
+        return jsonify({"error": "未授权"}), 403
+
+    if inference_status["result_image"]:
+        return jsonify({"result_image": inference_status["result_image"]})
+    else:
+        return jsonify({"error": "暂无结果图像"}), 404
+
+
+@app.route("/api/server/delete_inference_file", methods=["DELETE"])
+def delete_inference_file():
+    """删除推理文件"""
+    if "username" not in session or session["role"] != "server":
+        return jsonify({"error": "未授权"}), 403
+
+    data = request.get_json()
+    filename = data.get("filename")
+
+    if not filename:
+        return jsonify({"error": "未指定文件名"}), 400
+
+    # 删除.mhd文件
+    mhd_path = os.path.join(INFERENCE_UPLOAD_FOLDER, filename)
+
+    # 获取对应的.raw文件名
+    base_name = os.path.splitext(filename)[0]
+    raw_filename = base_name + ".raw"
+    raw_path = os.path.join(INFERENCE_UPLOAD_FOLDER, raw_filename)
+
+    deleted_files = []
+    errors = []
+
+    # 删除.mhd文件
+    if os.path.exists(mhd_path):
+        try:
+            os.remove(mhd_path)
+            deleted_files.append(filename)
+            add_server_log(f"已删除推理文件: {filename}")
+        except Exception as e:
+            errors.append(f"删除{filename}失败: {str(e)}")
+
+    # 删除对应的.raw文件
+    if os.path.exists(raw_path):
+        try:
+            os.remove(raw_path)
+            deleted_files.append(raw_filename)
+            add_server_log(f"已删除推理文件: {raw_filename}")
+        except Exception as e:
+            errors.append(f"删除{raw_filename}失败: {str(e)}")
+
+    if not deleted_files:
+        return jsonify({"error": "文件不存在"}), 404
+
+    # 从上传文件列表中移除
+    inference_status["uploaded_files"] = [
+        f
+        for f in inference_status["uploaded_files"]
+        if f["name"] not in [filename, raw_filename]
+    ]
+
+    response_message = f"已删除文件: {', '.join(deleted_files)}"
+    if errors:
+        response_message += f" (部分错误: {', '.join(errors)})"
+
+    return jsonify({"message": response_message, "deleted_files": deleted_files})
+
+
 # 在应用启动时初始化客户端数据状态
 initialize_client_data_status()
 
@@ -467,4 +825,4 @@ if __name__ == "__main__":
     add_server_log("服务器启动")
     add_server_log("等待客户端连接和上传数据")
 
-    app.run(debug=True, port=5050)
+    app.run(debug=True, port=5051)
