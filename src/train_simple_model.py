@@ -91,6 +91,7 @@ class SimpleLUNA16Dataset(Dataset):
         subset_folders=None,
         max_samples=None,
         patch_size=(64, 64, 64),
+        is_custom=False,
     ):
         """
         简化的LUNA16数据集加载器
@@ -105,13 +106,36 @@ class SimpleLUNA16Dataset(Dataset):
         # 获取所有可用的mhd文件
         self.image_files = []
 
-        if subset_folders is None:
-            subset_folders = [f"subset{i}" for i in range(10)]
+        if not is_custom:
+            # 标准LUNA16数据集加载方式
+            if subset_folders is None:
+                subset_folders = [f"subset{i}" for i in range(10)]
 
-        for subset in subset_folders:
-            subset_path = os.path.join(data_dir, subset)
-            if os.path.exists(subset_path):
-                mhd_files = [f for f in os.listdir(subset_path) if f.endswith(".mhd")]
+            for subset in subset_folders:
+                subset_path = os.path.join(data_dir, subset)
+                if os.path.exists(subset_path):
+                    mhd_files = [
+                        f for f in os.listdir(subset_path) if f.endswith(".mhd")
+                    ]
+                    for mhd_file in mhd_files:
+                        series_uid = mhd_file.replace(".mhd", "")
+                        # 检查是否有对应的标注
+                        if series_uid in self.annotations["seriesuid"].values:
+                            self.image_files.append(
+                                {
+                                    "series_uid": series_uid,
+                                    "image_path": os.path.join(subset_path, mhd_file),
+                                    "subset": subset,
+                                }
+                            )
+                        # else:
+                        # print(series_uid, "没有对应的标注")
+
+            print(f"找到 {len(self.image_files)} 个有标注的图像文件")
+        else:
+            # 自定义数据目录加载方式 - 直接扫描指定目录
+            if os.path.exists(data_dir):
+                mhd_files = [f for f in os.listdir(data_dir) if f.endswith(".mhd")]
                 for mhd_file in mhd_files:
                     series_uid = mhd_file.replace(".mhd", "")
                     # 检查是否有对应的标注
@@ -119,12 +143,13 @@ class SimpleLUNA16Dataset(Dataset):
                         self.image_files.append(
                             {
                                 "series_uid": series_uid,
-                                "image_path": os.path.join(subset_path, mhd_file),
-                                "subset": subset,
+                                "image_path": os.path.join(data_dir, mhd_file),
+                                "subset": "custom",
                             }
                         )
-
-        print(f"找到 {len(self.image_files)} 个有标注的图像文件")
+                print(f"找到 {len(self.image_files)} 个自定义图像文件")
+            else:
+                print(f"自定义数据目录 {data_dir} 不存在")
 
         # 限制样本数量用于快速测试
         if max_samples and max_samples < len(self.image_files):
@@ -267,23 +292,62 @@ class DiceLoss(nn.Module):
         return 1 - torch.mean(dice)
 
 
-def train_simple_model():
+def create_mock_dataset(patch_size=(64, 64, 64), num_samples=10):
+    """创建模拟数据集用于演示"""
+    class MockDataset(Dataset):
+        def __init__(self, patch_size, num_samples):
+            self.patch_size = patch_size
+            self.num_samples = num_samples
+            
+        def __len__(self):
+            return self.num_samples
+            
+        def __getitem__(self, idx):
+            # 创建随机的CT图像patch
+            image = torch.randn(1, *self.patch_size) * 0.1
+            # 创建随机的分割mask (大部分为背景)
+            mask = torch.zeros(2, *self.patch_size)
+            mask[0] = 1.0  # 背景
+            # 随机添加一些前景
+            if torch.rand(1) > 0.5:
+                center = [s//2 for s in self.patch_size]
+                size = 8
+                mask[1, 
+                     center[0]-size:center[0]+size,
+                     center[1]-size:center[1]+size,
+                     center[2]-size:center[2]+size] = 1.0
+                mask[0, 
+                     center[0]-size:center[0]+size,
+                     center[1]-size:center[1]+size,
+                     center[2]-size:center[2]+size] = 0.0
+            return image, mask
+    
+    return MockDataset(patch_size, num_samples)
+
+
+def train_simple_model(data_dir="./LUNA16", save_path="best_lung_nodule_model.pth"):
     """训练简化模型"""
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(f"使用设备: {device}")
 
     # 数据路径
-    data_dir = "./LUNA16"
-    csv_path = "./LUNA16/CSVFILES/annotations.csv"
-
-    # 创建数据集 - 使用部分数据进行快速训练测试
-    print("创建训练数据集...")
-    train_dataset = SimpleLUNA16Dataset(
-        data_dir=data_dir,
-        csv_path=csv_path,
-        subset_folders=["subset0"],  # 只使用subset0
-        max_samples=5,  # 很少的样本用于快速测试
-        patch_size=(64, 64, 64),
+    csv_path = os.path.join(data_dir, "CSVFILES/annotations.csv")
+    
+    # 检查数据路径是否存在
+    if not os.path.exists(data_dir):
+        print(f"警告: 数据目录不存在 {data_dir}")
+        print("将使用模拟数据进行训练...")
+        # 创建模拟数据集用于演示
+        train_dataset = create_mock_dataset()
+    else:
+        # 创建数据集 - 使用部分数据进行快速训练测试
+        print("创建训练数据集...")
+        train_dataset = SimpleLUNA16Dataset(
+            data_dir=data_dir,
+            csv_path=csv_path,
+            subset_folders=["subset0"],  # 只使用subset0
+            max_samples=5,  # 很少的样本用于快速测试
+            patch_size=(64, 64, 64),
     )
 
     print("创建验证数据集...")
@@ -403,13 +467,18 @@ def train_simple_model():
                     "optimizer_state_dict": optimizer.state_dict(),
                     "best_val_loss": best_val_loss,
                 },
-                "best_lung_nodule_model.pth",
+                save_path,
             )
-            print(f"保存最佳模型，验证损失: {best_val_loss:.4f}")
+            print(f"保存最佳模型到: {save_path}，验证损失: {best_val_loss:.4f}")
 
     print("训练完成!")
     return model
 
 
+def main():
+    """主函数 - 兼容性wrapper"""
+    return train_simple_model()
+
+
 if __name__ == "__main__":
-    model = train_simple_model()
+    model = main()

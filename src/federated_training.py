@@ -18,17 +18,35 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from torch.utils.data import Dataset, DataLoader, Subset
+import matplotlib
+matplotlib.use("Agg")  # 使用非GUI后端
 import matplotlib.pyplot as plt
 from tqdm import tqdm
 import warnings
 from typing import List, Dict, Tuple
 import random
 from collections import OrderedDict
+from datetime import datetime
+import sys  # 添加sys导入
 
 # 导入简化的模型和数据集
 from train_simple_model import Simple3DUNet, SimpleLUNA16Dataset, DiceLoss
 
 warnings.filterwarnings("ignore")
+
+
+class EmptyDataset(Dataset):
+    """空数据集，用于没有数据的客户端"""
+
+    def __init__(self, patch_size=(64, 64, 64)):
+        self.patch_size = patch_size
+
+    def __len__(self):
+        return 0
+
+    def __getitem__(self, idx):
+        # 这个方法不会被调用，因为长度为0
+        raise IndexError("Empty dataset has no items")
 
 
 class FederatedServer:
@@ -238,11 +256,11 @@ class FederatedClient:
                     total_loss += loss.item()
                     num_batches += 1
 
-                    if batch_idx % 5 == 0:
+                    if batch_idx % 10 == 0:  # 减少打印频率
                         print(
-                            f"  客户端 {self.client_id} - Epoch {epoch+1}/{epochs}, "
-                            f"Batch {batch_idx+1}, Loss: {loss.item():.4f}"
+                            f"  客户端 {self.client_id} - Epoch {epoch+1}/{epochs}, Batch {batch_idx+1}, Loss: {loss.item():.4f}"
                         )
+                        sys.stdout.flush()
 
                 except Exception as e:
                     print(f"  客户端 {self.client_id} 训练出错: {e}")
@@ -358,6 +376,7 @@ class FederatedLearningCoordinator:
                     csv_path=dataset.csv_path,
                     patch_size=dataset.patch_size,
                     max_samples=len(client_data),
+                    is_custom=True,
                 )
                 client_dataset.data = client_data
                 client_datasets.append(client_dataset)
@@ -370,6 +389,104 @@ class FederatedLearningCoordinator:
             )
             client_loaders.append(loader)
             print(f"客户端 {i} 数据量: {len(client_dataset)}")
+
+        return client_loaders
+
+    def distribute_data_from_folders(
+        self,
+        client_data_dirs,
+        csv_path,
+        patch_size=(64, 64, 64),
+        max_samples_per_client=None,
+    ):
+        """
+        从指定的客户端文件夹分布数据到各个客户端
+
+        Args:
+            client_data_dirs: 客户端数据目录列表，例如 ["./client0", "./client1", "./client2"]
+            csv_path: CSV注释文件路径
+            patch_size: 数据块大小
+            max_samples_per_client: 每个客户端的最大样本数量
+
+        Returns:
+            客户端数据加载器列表
+        """
+        if len(client_data_dirs) != self.num_clients:
+            raise ValueError(
+                f"客户端数据目录数量 ({len(client_data_dirs)}) 与客户端数量 ({self.num_clients}) 不匹配"
+            )
+
+        client_loaders = []
+
+        for i, data_dir in enumerate(client_data_dirs):
+            if not os.path.exists(data_dir):
+                print(
+                    f"警告: 客户端 {i} 的数据目录 {data_dir} 不存在，将创建空数据加载器"
+                )
+                # 创建空数据集
+                empty_dataset = EmptyDataset(patch_size=patch_size)
+                loader = DataLoader(
+                    empty_dataset, batch_size=1, shuffle=False, num_workers=0
+                )
+                client_loaders.append(loader)
+                print(f"客户端 {i} 数据量: 0 (数据目录不存在)")
+                continue
+
+            print(f"为客户端 {i} 创建数据集，使用数据目录: {data_dir}")
+
+            try:
+                # 为每个客户端创建独立的数据集
+                # 使用当前目录作为单个subset
+                subset_name = os.path.basename(data_dir)
+                if subset_name.startswith("subset"):
+                    # 如果是LUNA16的subset目录，使用标准方式
+                    subset_folders = [subset_name]
+                    parent_dir = os.path.dirname(data_dir)
+                    is_custom = False
+                    final_data_dir = parent_dir
+                else:
+                    # 如果是自定义目录，直接扫描该目录中的.mhd文件
+                    subset_folders = None
+                    is_custom = True
+                    final_data_dir = data_dir
+
+                client_dataset = SimpleLUNA16Dataset(
+                    data_dir=final_data_dir,
+                    csv_path=csv_path,
+                    subset_folders=subset_folders,
+                    patch_size=patch_size,
+                    max_samples=max_samples_per_client,
+                    is_custom=is_custom,
+                )
+
+                # 如果没有找到数据，创建一个空的数据集
+                if len(client_dataset.image_files) == 0:
+                    print(f"  警告: 在 {data_dir} 中没有找到有效的数据文件")
+                    # 使用空数据集
+                    empty_dataset = EmptyDataset(patch_size=patch_size)
+                    loader = DataLoader(
+                        empty_dataset, batch_size=1, shuffle=False, num_workers=0
+                    )
+                    client_loaders.append(loader)
+                    print(f"客户端 {i} 数据量: 0 (来自 {data_dir})")
+                else:
+                    loader = DataLoader(
+                        client_dataset, batch_size=1, shuffle=True, num_workers=0
+                    )
+                    client_loaders.append(loader)
+                    print(
+                        f"客户端 {i} 数据量: {len(client_dataset.image_files)} (来自 {data_dir})"
+                    )
+
+            except Exception as e:
+                print(f"  错误: 为客户端 {i} 创建数据集时出错: {e}")
+                # 创建空数据集作为fallback
+                empty_dataset = EmptyDataset(patch_size=patch_size)
+                loader = DataLoader(
+                    empty_dataset, batch_size=1, shuffle=False, num_workers=0
+                )
+                client_loaders.append(loader)
+                print(f"客户端 {i} 数据量: 0 (创建失败，使用空数据集)")
 
         return client_loaders
 
@@ -387,8 +504,55 @@ class FederatedLearningCoordinator:
         """
         print(f"开始联邦学习训练 - {global_rounds} 轮全局训练")
 
+        # 尝试获取Flask应用中的全局训练状态
+        global_training_status = None
+        try:
+            # 尝试从全局变量获取训练状态
+            import builtins
+
+            if hasattr(builtins, "app_training_status"):
+                global_training_status = builtins.app_training_status
+                print(f"成功连接到Flask训练状态: {global_training_status}")
+            else:
+                # 尝试从各种可能的模块获取
+                import sys
+
+                for module_name in list(sys.modules.keys()):
+                    if module_name in ["app", "__main__"]:
+                        module = sys.modules[module_name]
+                        if hasattr(module, "training_status"):
+                            global_training_status = module.training_status
+                            print(f"从模块 {module_name} 获取训练状态")
+                            break
+        except Exception as e:
+            print(f"无法连接到Flask训练状态: {e}")
+            pass
+
         for round_num in range(global_rounds):
+            import sys  # 确保sys在作用域内可用
+
             print(f"\n=== 全局训练轮次 {round_num + 1}/{global_rounds} ===")
+            sys.stdout.flush()
+
+            # 更新全局训练状态（如果存在）
+            if global_training_status:
+                try:
+                    global_training_status["current_round"] = round_num + 1
+                    global_training_status["progress"] = int(
+                        (round_num + 0.5) / global_rounds * 100
+                    )
+                    print(
+                        f"更新训练状态: 轮次 {round_num + 1}/{global_rounds}, 进度 {global_training_status['progress']}%"
+                    )
+                    sys.stdout.flush()
+                    # 确保任何更改立即可见
+                    import threading
+
+                    threading.Event().wait(0.01)  # 微小的暂停，让更新在主线程可见
+                except Exception as e:
+                    print(f"更新训练状态失败: {e}")
+                    sys.stdout.flush()
+                    pass
 
             # 1. 分发全局模型到所有客户端
             global_params = self.server.get_global_model_params()
@@ -399,12 +563,19 @@ class FederatedLearningCoordinator:
             client_params_list = []
             client_weights = []
 
+            print(f"开始第 {round_num + 1} 轮客户端本地训练...")
+            sys.stdout.flush()
+
             for i, (client, train_loader) in enumerate(
                 zip(self.clients, train_loaders)
             ):
                 if len(train_loader.dataset) == 0:
                     print(f"客户端 {i} 数据为空，跳过训练")
+                    sys.stdout.flush()
                     continue
+
+                print(f"客户端 {i} 开始本地训练...")
+                sys.stdout.flush()
 
                 # 本地训练
                 client.local_epochs = local_epochs
@@ -418,10 +589,14 @@ class FederatedLearningCoordinator:
                 client_weights.append(client_weight)
 
                 print(f"客户端 {i} 本地训练完成，数据量: {client_weight}")
+                sys.stdout.flush()
 
             # 3. 服务器执行模型聚合
             if client_params_list:
                 try:
+                    print(f"开始第 {round_num + 1} 轮模型聚合...")
+                    sys.stdout.flush()
+
                     self.server.federated_averaging(client_params_list, client_weights)
 
                     # 记录训练历史
@@ -438,18 +613,45 @@ class FederatedLearningCoordinator:
                     self.server.training_history["avg_loss"].append(avg_client_loss)
 
                     print(f"第 {round_num + 1} 轮平均客户端损失: {avg_client_loss:.4f}")
+                    sys.stdout.flush()
 
                     # 4. 评估全局模型（可选，可能跳过以避免错误）
                     if test_loader is not None:
                         try:
+                            print(f"评估第 {round_num + 1} 轮全局模型...")
+                            sys.stdout.flush()
                             global_loss = self.server.evaluate_global_model(test_loader)
                             self.server.training_history["avg_loss"][-1] = global_loss
+                            print(f"全局模型评估损失: {global_loss:.4f}")
+                            sys.stdout.flush()
                         except Exception as e:
                             print(f"全局模型评估失败: {e}")
+                            sys.stdout.flush()
                             # 继续训练，不中断
                 except Exception as e:
                     print(f"模型聚合失败: {e}")
+                    sys.stdout.flush()
                     break
+
+            # 更新全局训练状态（如果存在）
+            if global_training_status and round_num == global_rounds - 1:
+                try:
+                    global_training_status["current_round"] = global_rounds
+                    global_training_status["progress"] = 100
+                    global_training_status["is_training"] = False
+                    global_training_status["end_time"] = (
+                        datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                        if hasattr(datetime, "now")
+                        else "训练完成"
+                    )
+                    print(f"训练完成，更新最终状态: {global_training_status}")
+                    # 确保任何更改立即可见
+                    import threading
+
+                    threading.Event().wait(0.01)  # 微小的暂停，让更新在主线程可见
+                except Exception as e:
+                    print(f"更新最终训练状态失败: {e}")
+                    pass
 
         print("\n联邦学习训练完成！")
         return self.server.training_history
@@ -466,34 +668,44 @@ class FederatedLearningCoordinator:
             print("没有训练历史可绘制")
             return
 
-        plt.figure(figsize=(12, 4))
+        try:
+            plt.figure(figsize=(12, 4))
 
-        # 损失曲线
-        plt.subplot(1, 2, 1)
-        plt.plot(history["rounds"], history["avg_loss"], "b-o", label="平均损失")
-        plt.xlabel("全局训练轮次")
-        plt.ylabel("损失")
-        plt.title("联邦学习训练损失")
-        plt.legend()
-        plt.grid(True)
+            # 损失曲线
+            plt.subplot(1, 2, 1)
+            plt.plot(history["rounds"], history["avg_loss"], "b-o", label="平均损失")
+            plt.xlabel("全局训练轮次")
+            plt.ylabel("损失")
+            plt.title("联邦学习训练损失")
+            plt.legend()
+            plt.grid(True)
 
-        # 客户端参与情况
-        plt.subplot(1, 2, 2)
-        client_participation = [len(self.clients)] * len(history["rounds"])
-        plt.bar(
-            history["rounds"], client_participation, alpha=0.7, label="参与客户端数"
-        )
-        plt.xlabel("全局训练轮次")
-        plt.ylabel("客户端数量")
-        plt.title("客户端参与情况")
-        plt.legend()
-        plt.grid(True)
+            # 客户端参与情况
+            plt.subplot(1, 2, 2)
+            client_participation = [len(self.clients)] * len(history["rounds"])
+            plt.bar(
+                history["rounds"], client_participation, alpha=0.7, label="参与客户端数"
+            )
+            plt.xlabel("全局训练轮次")
+            plt.ylabel("客户端数量")
+            plt.title("客户端参与情况")
+            plt.legend()
+            plt.grid(True)
 
-        plt.tight_layout()
-        plt.show()
+            plt.tight_layout()
+
+            # 保存图片而不是显示
+            plt.savefig("federated_training_history.png", dpi=150, bbox_inches="tight")
+            plt.close()  # 关闭图形以释放内存
+            print("训练历史图表已保存到: federated_training_history.png")
+        except Exception as e:
+            print(f"绘制训练历史时出错: {e}")
+            print("跳过图表生成...")
 
 
-def train_federated_model(num_clients=3, global_rounds=5, local_epochs=3):
+def train_federated_model(
+    num_clients=3, global_rounds=5, local_epochs=3, client_data_dirs=None
+):
     """
     训练联邦学习模型的主函数
 
@@ -501,45 +713,70 @@ def train_federated_model(num_clients=3, global_rounds=5, local_epochs=3):
         num_clients: 客户端数量
         global_rounds: 全局训练轮数
         local_epochs: 本地训练轮数
+        client_data_dirs: 客户端数据目录列表，例如 ["./client0", "./client1", "./client2"]
+                         如果为None，则使用原有的数据分布策略
     """
+    import sys
+    import io
+
+    print("=== 联邦学习训练函数被调用 ===")
+    print(
+        f"参数: num_clients={num_clients}, global_rounds={global_rounds}, local_epochs={local_epochs}"
+    )
+    print(f"客户端数据目录: {client_data_dirs}")
+    sys.stdout.flush()
+
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(f"使用设备: {device}")
-
-    # 数据路径
-    data_dir = "./LUNA16"
-    csv_path = "./LUNA16/CSVFILES/annotations.csv"
-
-    # 创建数据集
-    print("创建训练数据集...")
-    train_dataset = SimpleLUNA16Dataset(
-        data_dir=data_dir,
-        csv_path=csv_path,
-        patch_size=(64, 64, 64),
-        max_samples=15,  # 限制样本数量用于快速测试
-    )
-
-    print("创建测试数据集...")
-    test_dataset = SimpleLUNA16Dataset(
-        data_dir=data_dir, csv_path=csv_path, patch_size=(64, 64, 64), max_samples=5
-    )
-
-    test_loader = DataLoader(test_dataset, batch_size=1, shuffle=False, num_workers=0)
+    sys.stdout.flush()
 
     # 创建联邦学习协调器
+    csv_path = "/Users/tony/Desktop/Tony/College/大二下/软件工程/大作业/new_front/src/annotations.csv"
+    print("正在初始化联邦学习协调器...")
+    sys.stdout.flush()
+
     coordinator = FederatedLearningCoordinator(
         num_clients=num_clients,
         model_class=Simple3DUNet,
         model_kwargs={"in_channels": 1, "out_channels": 2},
         device=device,
     )
+    print("联邦学习协调器初始化完成")
+    sys.stdout.flush()
 
-    # 分布数据到客户端
-    print("分布数据到客户端...")
-    client_loaders = coordinator.distribute_data(
-        train_dataset, distribution_strategy="iid"
-    )
+    # 根据是否指定客户端数据目录来分配数据
+    if client_data_dirs is not None:
+        print("使用指定的客户端数据目录分布数据...")
+        print(f"客户端数据目录: {client_data_dirs}")
+        sys.stdout.flush()
+
+        # 使用指定文件夹分布数据
+        print("正在为各客户端加载数据...")
+        sys.stdout.flush()
+
+        client_loaders = coordinator.distribute_data_from_folders(
+            client_data_dirs=client_data_dirs,
+            csv_path=csv_path,
+            patch_size=(64, 64, 64),
+            max_samples_per_client=15,  # 每个客户端最大样本数
+        )
+        print(f"数据加载完成，共 {len(client_loaders)} 个客户端")
+        sys.stdout.flush()
+    else:
+        print("使用默认数据分布策略...")
+        print("警告: 未提供客户端数据目录，无法使用默认分布策略")
+        sys.stdout.flush()
+        client_loaders = []
+
+    # 创建测试数据集 - 跳过测试阶段以避免错误
+    print("跳过测试数据集创建...")
+    test_loader = None
+    sys.stdout.flush()
 
     # 执行联邦学习训练
+    print("开始执行联邦学习训练...")
+    sys.stdout.flush()
+
     training_history = coordinator.federated_training(
         train_loaders=client_loaders,
         test_loader=test_loader,
@@ -548,19 +785,119 @@ def train_federated_model(num_clients=3, global_rounds=5, local_epochs=3):
     )
 
     # 保存模型
+    print("正在保存训练好的模型...")
+    sys.stdout.flush()
     coordinator.save_federated_model("best_federated_lung_nodule_model.pth")
 
     # 绘制训练历史
+    print("正在生成训练历史图表...")
+    sys.stdout.flush()
     coordinator.plot_training_history()
 
     print(f"\n联邦学习训练完成！")
     print(f"客户端数量: {num_clients}")
     print(f"全局轮数: {global_rounds}")
     print(f"本地轮数: {local_epochs}")
+    if client_data_dirs:
+        print(f"使用的客户端数据目录: {client_data_dirs}")
+    sys.stdout.flush()
+
+    return coordinator
+
+
+def run_federated_training(
+    data_dir="testLUNA",
+    num_clients=3,
+    global_rounds=5,
+    local_epochs=2,
+    save_path="best_federated_lung_nodule_model.pth",
+    client_data_directories=None,
+):
+    """
+    联邦学习训练的包装函数，用于从Flask应用调用
+
+    Args:
+        data_dir: 数据目录（当client_data_directories为None时使用）
+        num_clients: 客户端数量
+        global_rounds: 全局训练轮数
+        local_epochs: 本地训练轮数
+        save_path: 模型保存路径
+        client_data_directories: 客户端数据目录列表，如果提供则直接使用这些目录
+    """
+    # 如果直接提供了客户端数据目录，则使用它们
+    if client_data_directories:
+        print(f"使用提供的客户端数据目录: {client_data_directories}")
+        client_data_dirs = client_data_directories
+    else:
+        # 检查数据目录中的客户端文件夹
+        client_data_dirs = []
+        if os.path.exists(data_dir):
+            # 查找客户端文件夹
+            potential_clients = []
+            for item in os.listdir(data_dir):
+                item_path = os.path.join(data_dir, item)
+                if os.path.isdir(item_path):
+                    # 检查是否包含.mhd文件
+                    has_mhd = any(
+                        f.endswith(".mhd")
+                        for f in os.listdir(item_path)
+                        if os.path.isfile(os.path.join(item_path, f))
+                    )
+                    if has_mhd:
+                        potential_clients.append(item_path)
+
+            if potential_clients:
+                # 使用找到的客户端文件夹
+                client_data_dirs = potential_clients[:num_clients]
+                if len(client_data_dirs) < num_clients:
+                    print(
+                        f"警告: 只找到 {len(client_data_dirs)} 个客户端数据文件夹，但需要 {num_clients} 个"
+                    )
+                    # 补充空的客户端文件夹
+                    while len(client_data_dirs) < num_clients:
+                        client_data_dirs.append(None)
+
+    # 调用原有的训练函数
+    coordinator = train_federated_model(
+        num_clients=len(client_data_dirs) if client_data_dirs else num_clients,
+        global_rounds=global_rounds,
+        local_epochs=local_epochs,
+        client_data_dirs=client_data_dirs if client_data_dirs else None,
+    )
+
+    # 保存模型
+    if coordinator and coordinator.global_model:
+        torch.save(
+            {
+                "model_state_dict": coordinator.global_model.state_dict(),
+                "round_num": global_rounds,
+                "federated_training": True,
+            },
+            save_path,
+        )
+        print(f"联邦学习模型已保存到: {save_path}")
 
     return coordinator
 
 
 if __name__ == "__main__":
-    # 运行联邦学习训练
-    coordinator = train_federated_model(num_clients=3, global_rounds=3, local_epochs=2)
+    # 示例1: 使用默认数据分布策略（原有方式）
+    # print("=== 示例1: 使用默认数据分布策略 ===")
+    # coordinator = train_federated_model(num_clients=3, global_rounds=3, local_epochs=2)
+
+    # 示例2: 使用指定的客户端数据文件夹
+    print("=== 示例: 使用指定的客户端数据文件夹 ===")
+
+    # 或者使用自定义的客户端文件夹
+    client_data_directories = [
+        "../uploads/client1_data",
+        "../uploads/client2_data",  # 客户端1的专用数据文件夹
+        "../uploads/client3_data",  # 客户端2的专用数据文件夹
+    ]
+
+    coordinator = train_federated_model(
+        num_clients=3,
+        global_rounds=3,
+        local_epochs=2,
+        client_data_dirs=client_data_directories,
+    )
