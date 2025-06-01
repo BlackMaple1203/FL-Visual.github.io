@@ -13,7 +13,7 @@ import base64
 # 从您现有的脚本导入训练函数
 # 确保 src 目录在 Python 路径中，或者调整导入方式
 sys.path.append(os.path.join(os.path.dirname(__file__), "src"))
-from federated_training import train_federated_model
+from federated_training import train_federated_model, set_flask_log_functions
 from federated_inference import run_inference
 
 app = Flask(__name__)
@@ -374,6 +374,10 @@ def start_training():
             add_training_log(f"全局训练轮数: {global_rounds}")
             add_training_log(f"本地训练轮数: {local_epochs}")
             add_training_log(f"客户端数据路径: {client_paths_for_training}")
+
+            # 设置联邦训练的日志函数，使训练过程中的日志能够在Web界面显示
+            set_flask_log_functions(add_training_log, add_server_log)
+            add_training_log("已连接日志系统，训练日志将同时显示在终端和Web界面")
 
             coordinator = train_federated_model(
                 num_clients=num_active_clients,
@@ -838,4 +842,4 @@ if __name__ == "__main__":
     add_server_log("服务器启动")
     add_server_log("等待客户端连接和上传数据")
 
-    app.run(debug=True, port=5051)
+    app.run(debug=True, port=5052)

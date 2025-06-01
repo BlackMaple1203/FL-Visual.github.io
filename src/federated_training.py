@@ -19,6 +19,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 from torch.utils.data import Dataset, DataLoader, Subset
 import matplotlib
+
 matplotlib.use("Agg")  # 使用非GUI后端
 import matplotlib.pyplot as plt
 from tqdm import tqdm
@@ -28,6 +29,48 @@ import random
 from collections import OrderedDict
 from datetime import datetime
 import sys  # 添加sys导入
+
+# 全局变量，用于存储Flask app的日志函数
+flask_add_training_log = None
+flask_add_server_log = None
+
+
+def log_print(message, is_training=True):
+    """
+    同时在终端和Flask日志中显示消息
+
+    Args:
+        message: 要打印的消息
+        is_training: 是否为训练日志（True）或服务器日志（False）
+    """
+    # 在终端打印
+    print(message)
+    sys.stdout.flush()
+
+    # 添加到Flask日志
+    try:
+        if is_training and flask_add_training_log:
+            flask_add_training_log(message)
+        elif not is_training and flask_add_server_log:
+            flask_add_server_log(message)
+    except Exception as e:
+        # 如果Flask日志函数不可用，只在终端打印，不影响主要功能
+        print(f"Flask日志函数调用失败: {e}")
+        pass
+
+
+def set_flask_log_functions(training_log_func, server_log_func):
+    """
+    设置Flask的日志函数
+
+    Args:
+        training_log_func: Flask的add_training_log函数
+        server_log_func: Flask的add_server_log函数
+    """
+    global flask_add_training_log, flask_add_server_log
+    flask_add_training_log = training_log_func
+    flask_add_server_log = server_log_func
+
 
 # 导入简化的模型和数据集
 from train_simple_model import Simple3DUNet, SimpleLUNA16Dataset, DiceLoss
@@ -89,8 +132,9 @@ class FederatedServer:
             total_weight = sum(client_weights)
             normalized_weights = [w / total_weight for w in client_weights]
 
-            print(
-                f"开始模型聚合 - {len(client_params_list)} 个客户端，权重: {normalized_weights}"
+            log_print(
+                f"开始模型聚合 - {len(client_params_list)} 个客户端，权重: {normalized_weights}",
+                is_training=True,
             )
 
             # 初始化聚合参数
@@ -136,11 +180,11 @@ class FederatedServer:
             self.global_model.load_state_dict(global_params)
             self.round_num += 1
 
-            print(f"✅ 全局模型已更新 - 第 {self.round_num} 轮")
+            log_print(f"✅ 全局模型已更新 - 第 {self.round_num} 轮", is_training=True)
 
         except Exception as e:
-            print(f"❌ 模型聚合过程中出现错误: {e}")
-            print(f"错误类型: {type(e).__name__}")
+            log_print(f"❌ 模型聚合过程中出现错误: {e}", is_training=True)
+            log_print(f"错误类型: {type(e).__name__}", is_training=True)
             raise e
 
     def evaluate_global_model(self, test_loader):
@@ -166,7 +210,7 @@ class FederatedServer:
                 num_batches += 1
 
         avg_loss = total_loss / num_batches if num_batches > 0 else 0.0
-        print(f"全局模型验证损失: {avg_loss:.4f}")
+        log_print(f"全局模型验证损失: {avg_loss:.4f}", is_training=True)
 
         return avg_loss
 
@@ -180,7 +224,7 @@ class FederatedServer:
             },
             save_path,
         )
-        print(f"全局模型已保存到: {save_path}")
+        log_print(f"全局模型已保存到: {save_path}", is_training=True)
 
 
 class FederatedClient:
@@ -233,7 +277,9 @@ class FederatedClient:
 
         epoch_losses = []
 
-        print(f"客户端 {self.client_id} 开始本地训练 ({epochs} 轮)...")
+        log_print(
+            f"客户端 {self.client_id} 开始本地训练 ({epochs} 轮)...", is_training=True
+        )
 
         for epoch in range(epochs):
             total_loss = 0.0
@@ -257,19 +303,22 @@ class FederatedClient:
                     num_batches += 1
 
                     if batch_idx % 10 == 0:  # 减少打印频率
-                        print(
-                            f"  客户端 {self.client_id} - Epoch {epoch+1}/{epochs}, Batch {batch_idx+1}, Loss: {loss.item():.4f}"
+                        log_print(
+                            f"  客户端 {self.client_id} - Epoch {epoch+1}/{epochs}, Batch {batch_idx+1}, Loss: {loss.item():.4f}",
+                            is_training=True,
                         )
-                        sys.stdout.flush()
 
                 except Exception as e:
-                    print(f"  客户端 {self.client_id} 训练出错: {e}")
+                    log_print(
+                        f"  客户端 {self.client_id} 训练出错: {e}", is_training=True
+                    )
                     continue
 
             avg_loss = total_loss / num_batches if num_batches > 0 else 0.0
             epoch_losses.append(avg_loss)
-            print(
-                f"  客户端 {self.client_id} - Epoch {epoch+1} 平均损失: {avg_loss:.4f}"
+            log_print(
+                f"  客户端 {self.client_id} - Epoch {epoch+1} 平均损失: {avg_loss:.4f}",
+                is_training=True,
             )
 
         self.training_history.extend(epoch_losses)
@@ -314,7 +363,7 @@ class FederatedLearningCoordinator:
             for i in range(num_clients)
         ]
 
-        print(f"联邦学习系统初始化完成 - {num_clients} 个客户端")
+        log_print(f"联邦学习系统初始化完成 - {num_clients} 个客户端", is_training=False)
 
     def distribute_data(self, dataset, distribution_strategy="iid"):
         """
@@ -388,7 +437,7 @@ class FederatedLearningCoordinator:
                 client_dataset, batch_size=1, shuffle=True, num_workers=0
             )
             client_loaders.append(loader)
-            print(f"客户端 {i} 数据量: {len(client_dataset)}")
+            log_print(f"客户端 {i} 数据量: {len(client_dataset)}", is_training=True)
 
         return client_loaders
 
@@ -420,8 +469,9 @@ class FederatedLearningCoordinator:
 
         for i, data_dir in enumerate(client_data_dirs):
             if not os.path.exists(data_dir):
-                print(
-                    f"警告: 客户端 {i} 的数据目录 {data_dir} 不存在，将创建空数据加载器"
+                log_print(
+                    f"警告: 客户端 {i} 的数据目录 {data_dir} 不存在，将创建空数据加载器",
+                    is_training=True,
                 )
                 # 创建空数据集
                 empty_dataset = EmptyDataset(patch_size=patch_size)
@@ -429,10 +479,12 @@ class FederatedLearningCoordinator:
                     empty_dataset, batch_size=1, shuffle=False, num_workers=0
                 )
                 client_loaders.append(loader)
-                print(f"客户端 {i} 数据量: 0 (数据目录不存在)")
+                log_print(f"客户端 {i} 数据量: 0 (数据目录不存在)", is_training=True)
                 continue
 
-            print(f"为客户端 {i} 创建数据集，使用数据目录: {data_dir}")
+            log_print(
+                f"为客户端 {i} 创建数据集，使用数据目录: {data_dir}", is_training=True
+            )
 
             try:
                 # 为每个客户端创建独立的数据集
@@ -461,32 +513,42 @@ class FederatedLearningCoordinator:
 
                 # 如果没有找到数据，创建一个空的数据集
                 if len(client_dataset.image_files) == 0:
-                    print(f"  警告: 在 {data_dir} 中没有找到有效的数据文件")
+                    log_print(
+                        f"  警告: 在 {data_dir} 中没有找到有效的数据文件",
+                        is_training=True,
+                    )
                     # 使用空数据集
                     empty_dataset = EmptyDataset(patch_size=patch_size)
                     loader = DataLoader(
                         empty_dataset, batch_size=1, shuffle=False, num_workers=0
                     )
                     client_loaders.append(loader)
-                    print(f"客户端 {i} 数据量: 0 (来自 {data_dir})")
+                    log_print(
+                        f"客户端 {i} 数据量: 0 (来自 {data_dir})", is_training=True
+                    )
                 else:
                     loader = DataLoader(
                         client_dataset, batch_size=1, shuffle=True, num_workers=0
                     )
                     client_loaders.append(loader)
-                    print(
-                        f"客户端 {i} 数据量: {len(client_dataset.image_files)} (来自 {data_dir})"
+                    log_print(
+                        f"客户端 {i} 数据量: {len(client_dataset.image_files)} (来自 {data_dir})",
+                        is_training=True,
                     )
 
             except Exception as e:
-                print(f"  错误: 为客户端 {i} 创建数据集时出错: {e}")
+                log_print(
+                    f"  错误: 为客户端 {i} 创建数据集时出错: {e}", is_training=True
+                )
                 # 创建空数据集作为fallback
                 empty_dataset = EmptyDataset(patch_size=patch_size)
                 loader = DataLoader(
                     empty_dataset, batch_size=1, shuffle=False, num_workers=0
                 )
                 client_loaders.append(loader)
-                print(f"客户端 {i} 数据量: 0 (创建失败，使用空数据集)")
+                log_print(
+                    f"客户端 {i} 数据量: 0 (创建失败，使用空数据集)", is_training=True
+                )
 
         return client_loaders
 
@@ -502,7 +564,7 @@ class FederatedLearningCoordinator:
             global_rounds: 全局训练轮数
             local_epochs: 本地训练轮数
         """
-        print(f"开始联邦学习训练 - {global_rounds} 轮全局训练")
+        log_print(f"开始联邦学习训练 - {global_rounds} 轮全局训练", is_training=True)
 
         # 尝试获取Flask应用中的全局训练状态
         global_training_status = None
@@ -512,7 +574,10 @@ class FederatedLearningCoordinator:
 
             if hasattr(builtins, "app_training_status"):
                 global_training_status = builtins.app_training_status
-                print(f"成功连接到Flask训练状态: {global_training_status}")
+                log_print(
+                    f"成功连接到Flask训练状态: {global_training_status}",
+                    is_training=True,
+                )
             else:
                 # 尝试从各种可能的模块获取
                 import sys
@@ -522,17 +587,21 @@ class FederatedLearningCoordinator:
                         module = sys.modules[module_name]
                         if hasattr(module, "training_status"):
                             global_training_status = module.training_status
-                            print(f"从模块 {module_name} 获取训练状态")
+                            log_print(
+                                f"从模块 {module_name} 获取训练状态", is_training=True
+                            )
                             break
         except Exception as e:
-            print(f"无法连接到Flask训练状态: {e}")
+            log_print(f"无法连接到Flask训练状态: {e}", is_training=True)
             pass
 
         for round_num in range(global_rounds):
             import sys  # 确保sys在作用域内可用
 
-            print(f"\n=== 全局训练轮次 {round_num + 1}/{global_rounds} ===")
-            sys.stdout.flush()
+            log_print(
+                f"\n=== 全局训练轮次 {round_num + 1}/{global_rounds} ===",
+                is_training=True,
+            )
 
             # 更新全局训练状态（如果存在）
             if global_training_status:
@@ -541,17 +610,16 @@ class FederatedLearningCoordinator:
                     global_training_status["progress"] = int(
                         (round_num + 0.5) / global_rounds * 100
                     )
-                    print(
-                        f"更新训练状态: 轮次 {round_num + 1}/{global_rounds}, 进度 {global_training_status['progress']}%"
+                    log_print(
+                        f"更新训练状态: 轮次 {round_num + 1}/{global_rounds}, 进度 {global_training_status['progress']}%",
+                        is_training=True,
                     )
-                    sys.stdout.flush()
                     # 确保任何更改立即可见
                     import threading
 
                     threading.Event().wait(0.01)  # 微小的暂停，让更新在主线程可见
                 except Exception as e:
-                    print(f"更新训练状态失败: {e}")
-                    sys.stdout.flush()
+                    log_print(f"更新训练状态失败: {e}", is_training=True)
                     pass
 
             # 1. 分发全局模型到所有客户端
@@ -563,19 +631,16 @@ class FederatedLearningCoordinator:
             client_params_list = []
             client_weights = []
 
-            print(f"开始第 {round_num + 1} 轮客户端本地训练...")
-            sys.stdout.flush()
+            log_print(f"开始第 {round_num + 1} 轮客户端本地训练...", is_training=True)
 
             for i, (client, train_loader) in enumerate(
                 zip(self.clients, train_loaders)
             ):
                 if len(train_loader.dataset) == 0:
-                    print(f"客户端 {i} 数据为空，跳过训练")
-                    sys.stdout.flush()
+                    log_print(f"客户端 {i} 数据为空，跳过训练", is_training=True)
                     continue
 
-                print(f"客户端 {i} 开始本地训练...")
-                sys.stdout.flush()
+                log_print(f"客户端 {i} 开始本地训练...", is_training=True)
 
                 # 本地训练
                 client.local_epochs = local_epochs
@@ -588,14 +653,15 @@ class FederatedLearningCoordinator:
                 client_params_list.append(client_params)
                 client_weights.append(client_weight)
 
-                print(f"客户端 {i} 本地训练完成，数据量: {client_weight}")
-                sys.stdout.flush()
+                log_print(
+                    f"客户端 {i} 本地训练完成，数据量: {client_weight}",
+                    is_training=True,
+                )
 
             # 3. 服务器执行模型聚合
             if client_params_list:
                 try:
-                    print(f"开始第 {round_num + 1} 轮模型聚合...")
-                    sys.stdout.flush()
+                    log_print(f"开始第 {round_num + 1} 轮模型聚合...", is_training=True)
 
                     self.server.federated_averaging(client_params_list, client_weights)
 
@@ -612,25 +678,28 @@ class FederatedLearningCoordinator:
                     self.server.training_history["rounds"].append(round_num + 1)
                     self.server.training_history["avg_loss"].append(avg_client_loss)
 
-                    print(f"第 {round_num + 1} 轮平均客户端损失: {avg_client_loss:.4f}")
-                    sys.stdout.flush()
+                    log_print(
+                        f"第 {round_num + 1} 轮平均客户端损失: {avg_client_loss:.4f}",
+                        is_training=True,
+                    )
 
                     # 4. 评估全局模型（可选，可能跳过以避免错误）
                     if test_loader is not None:
                         try:
-                            print(f"评估第 {round_num + 1} 轮全局模型...")
-                            sys.stdout.flush()
+                            log_print(
+                                f"评估第 {round_num + 1} 轮全局模型...",
+                                is_training=True,
+                            )
                             global_loss = self.server.evaluate_global_model(test_loader)
                             self.server.training_history["avg_loss"][-1] = global_loss
-                            print(f"全局模型评估损失: {global_loss:.4f}")
-                            sys.stdout.flush()
+                            log_print(
+                                f"全局模型评估损失: {global_loss:.4f}", is_training=True
+                            )
                         except Exception as e:
-                            print(f"全局模型评估失败: {e}")
-                            sys.stdout.flush()
+                            log_print(f"全局模型评估失败: {e}", is_training=True)
                             # 继续训练，不中断
                 except Exception as e:
-                    print(f"模型聚合失败: {e}")
-                    sys.stdout.flush()
+                    log_print(f"模型聚合失败: {e}", is_training=True)
                     break
 
             # 更新全局训练状态（如果存在）
@@ -644,16 +713,18 @@ class FederatedLearningCoordinator:
                         if hasattr(datetime, "now")
                         else "训练完成"
                     )
-                    print(f"训练完成，更新最终状态: {global_training_status}")
+                    log_print(
+                        f"训练完成，更新最终状态: {global_training_status}",
+                        is_training=True,
+                    )
                     # 确保任何更改立即可见
                     import threading
 
                     threading.Event().wait(0.01)  # 微小的暂停，让更新在主线程可见
                 except Exception as e:
-                    print(f"更新最终训练状态失败: {e}")
-                    pass
+                    log_print(f"更新最终训练状态失败: {e}", is_training=True)
 
-        print("\n联邦学习训练完成！")
+        log_print("\n联邦学习训练完成！", is_training=True)
         return self.server.training_history
 
     def save_federated_model(self, save_path="federated_luna16_model.pth"):
@@ -665,7 +736,7 @@ class FederatedLearningCoordinator:
         history = self.server.training_history
 
         if not history["rounds"]:
-            print("没有训练历史可绘制")
+            log_print("没有训练历史可绘制", is_training=True)
             return
 
         try:
@@ -697,10 +768,12 @@ class FederatedLearningCoordinator:
             # 保存图片而不是显示
             plt.savefig("federated_training_history.png", dpi=150, bbox_inches="tight")
             plt.close()  # 关闭图形以释放内存
-            print("训练历史图表已保存到: federated_training_history.png")
+            log_print(
+                "训练历史图表已保存到: federated_training_history.png", is_training=True
+            )
         except Exception as e:
-            print(f"绘制训练历史时出错: {e}")
-            print("跳过图表生成...")
+            log_print(f"绘制训练历史时出错: {e}", is_training=True)
+            log_print("跳过图表生成...", is_training=True)
 
 
 def train_federated_model(
@@ -719,21 +792,19 @@ def train_federated_model(
     import sys
     import io
 
-    print("=== 联邦学习训练函数被调用 ===")
-    print(
-        f"参数: num_clients={num_clients}, global_rounds={global_rounds}, local_epochs={local_epochs}"
+    log_print("=== 联邦学习训练函数被调用 ===", is_training=True)
+    log_print(
+        f"参数: num_clients={num_clients}, global_rounds={global_rounds}, local_epochs={local_epochs}",
+        is_training=True,
     )
-    print(f"客户端数据目录: {client_data_dirs}")
-    sys.stdout.flush()
+    log_print(f"客户端数据目录: {client_data_dirs}", is_training=True)
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    print(f"使用设备: {device}")
-    sys.stdout.flush()
+    log_print(f"使用设备: {device}", is_training=True)
 
     # 创建联邦学习协调器
     csv_path = "./src/annotations.csv"
-    print("正在初始化联邦学习协调器...")
-    sys.stdout.flush()
+    log_print("正在初始化联邦学习协调器...", is_training=True)
 
     coordinator = FederatedLearningCoordinator(
         num_clients=num_clients,

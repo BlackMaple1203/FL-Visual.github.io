@@ -387,7 +387,7 @@ def visualize_federated_results(
     for i, (voxel_x, voxel_y, voxel_z, conf) in enumerate(nodule_voxels):
         # 第一行：原始图像 + 圆圈标记
         axes[0, i].imshow(image_array[voxel_z], cmap="gray")
-        axes[0, i].set_title(f"原始图像 - 切片 {voxel_z}")
+        axes[0, i].set_title(f"Original Image - Slice {voxel_z}")
         axes[0, i].axis("off")
 
         # 添加红色圆圈标记结节位置
@@ -400,7 +400,7 @@ def visualize_federated_results(
         axes[0, i].text(
             voxel_x + 20,
             voxel_y,
-            f"置信度: {conf:.3f}",
+            f"Confidence: {conf:.3f}",
             color="red",
             fontsize=10,
             bbox=dict(boxstyle="round,pad=0.3", facecolor="white", alpha=0.8),
@@ -411,7 +411,7 @@ def visualize_federated_results(
         prob_overlay = axes[1, i].imshow(
             probability_map[voxel_z], cmap="jet", alpha=0.6, vmin=0, vmax=1
         )
-        axes[1, i].set_title(f"概率图 - 切片 {voxel_z}")
+        axes[1, i].set_title(f"Probability Map - Slice {voxel_z}")
         axes[1, i].axis("off")
 
         # 在概率图上也添加圆圈标记
@@ -455,11 +455,11 @@ def visualize_federated_results(
         ] = np.max(data_marked)
 
         axes[2, i].imshow(data_marked, cmap="gray")
-        axes[2, i].set_title(f"标记结节 {i+1}")
+        axes[2, i].set_title(f"Marked Nodule {i+1}")
         axes[2, i].axis("off")
 
-    plt.colorbar(prob_overlay, ax=axes[1, :], shrink=0.6, label="结节概率")
-    plt.suptitle("联邦学习模型预测结果", fontsize=16)
+    plt.colorbar(prob_overlay, ax=axes[1, :], shrink=0.6, label="Nodule Probability")
+    plt.suptitle("Federated Learning Model Prediction Results", fontsize=16)
     plt.tight_layout()
 
     if save_path:
@@ -472,7 +472,7 @@ def visualize_federated_results(
             tempfile.gettempdir(), f"federated_inference_result_{timestamp}.png"
         )
         plt.savefig(save_file, dpi=150, bbox_inches="tight")
-        plt.close()  # 关闭图形以释放内存
+        plt.close()
         return save_file
     else:
         plt.show()
@@ -507,7 +507,7 @@ def visualize_probability_map_only(
     for i, slice_idx in enumerate(top_slices):
         # 原始图像
         axes[0, i].imshow(image_array[slice_idx], cmap="gray")
-        axes[0, i].set_title(f"原始图像 - 切片 {slice_idx}")
+        axes[0, i].set_title(f"Original Image - Slice {slice_idx}")
         axes[0, i].axis("off")
 
         # 概率图
@@ -515,11 +515,11 @@ def visualize_probability_map_only(
         prob_overlay = axes[1, i].imshow(
             probability_map[slice_idx], cmap="jet", alpha=0.6, vmin=0, vmax=1
         )
-        axes[1, i].set_title(f"概率图 (最大值: {slice_max_probs[slice_idx]:.3f})")
+        axes[1, i].set_title(f"Probability Map (Max: {slice_max_probs[slice_idx]:.3f})")
         axes[1, i].axis("off")
 
-    plt.colorbar(prob_overlay, ax=axes[1, :], shrink=0.6, label="结节概率")
-    plt.suptitle("联邦学习模型预测结果", fontsize=16)
+    plt.colorbar(prob_overlay, ax=axes[1, :], shrink=0.6, label="Nodule Probability")
+    plt.suptitle("Federated Learning Model Prediction Results", fontsize=16)
     plt.tight_layout()
 
     if save_path:
