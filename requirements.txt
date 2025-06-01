@@ -21,6 +21,9 @@ matplotlib==3.7.2
 # Progress bars
 tqdm==4.65.0
 
+# gunicorn
+gunicorn
+
 # Additional Python standard library modules used:
 # - os (built-in)
 # - copy (built-in)
