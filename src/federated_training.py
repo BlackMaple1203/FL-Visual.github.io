@@ -731,7 +731,7 @@ def train_federated_model(
     sys.stdout.flush()
 
     # 创建联邦学习协调器
-    csv_path = "/Users/tony/Desktop/Tony/College/大二下/软件工程/大作业/new_front/src/annotations.csv"
+    csv_path = "./src/annotations.csv"
     print("正在初始化联邦学习协调器...")
     sys.stdout.flush()
 

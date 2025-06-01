@@ -688,6 +688,135 @@
             background: #fed7d7;
             color: #822727;
         }
+
+        /* 训练参数控制样式 */
+        .training-parameters {
+            margin: 2rem 0;
+            padding: 1.5rem;
+            background: linear-gradient(135deg, rgba(102, 126, 234, 0.05), rgba(118, 75, 162, 0.05));
+            border-radius: 15px;
+            border: 1px solid rgba(102, 126, 234, 0.1);
+        }
+
+        .training-parameters h3 {
+            color: #2d3748;
+            margin-bottom: 1.5rem;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .training-parameters h3::before {
+            content: "⚙️";
+            font-size: 1.2rem;
+        }
+
+        .parameter-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 1.5rem;
+            margin-bottom: 1.5rem;
+        }
+
+        .parameter-control {
+            background: white;
+            padding: 1.5rem;
+            border-radius: 12px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+            border: 1px solid #e2e8f0;
+            transition: all 0.3s ease;
+        }
+
+        .parameter-control:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 25px rgba(102, 126, 234, 0.1);
+        }
+
+        .parameter-control label {
+            display: block;
+            font-weight: 600;
+            color: #2d3748;
+            margin-bottom: 1rem;
+            font-size: 1rem;
+        }
+
+        .param-controls {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 1rem;
+            margin-bottom: 0.5rem;
+        }
+
+        .param-btn {
+            width: 40px;
+            height: 40px;
+            border: none;
+            border-radius: 50%;
+            background: linear-gradient(45deg, #667eea, #764ba2);
+            color: white;
+            font-size: 1.2rem;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .param-btn:hover:not(:disabled) {
+            transform: scale(1.1);
+            box-shadow: 0 4px 15px rgba(102, 126, 234, 0.3);
+        }
+
+        .param-btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .param-value {
+            font-size: 1.5rem;
+            font-weight: bold;
+            color: #667eea;
+            min-width: 60px;
+            text-align: center;
+            padding: 8px 16px;
+            background: white;
+            border: 2px solid #e2e8f0;
+            border-radius: 8px;
+        }
+
+        .param-range {
+            text-align: center;
+            margin-top: 0.5rem;
+        }
+
+        .param-range small {
+            color: #718096;
+            font-size: 0.85rem;
+        }
+
+        .estimated-time {
+            background: white;
+            padding: 1rem 1.5rem;
+            border-radius: 10px;
+            border: 1px solid #e2e8f0;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            font-weight: 500;
+            color: #4a5568;
+        }
+
+        .estimated-time i {
+            color: #667eea;
+            font-size: 1.1rem;
+        }
+
+        #estimatedTime {
+            color: #667eea;
+            font-weight: 600;
+        }
     </style>
 </head>
 <body>
@@ -733,6 +862,39 @@
 
             <div class="progress-bar">
                 <div class="progress-fill" id="progressBar" style="width: {{ training_status.progress }}%"></div>
+            </div>
+
+            <!-- 训练参数控制 -->
+            <div class="training-parameters">
+                <h3>训练参数设置</h3>
+                <div class="parameter-grid">
+                    <div class="parameter-control">
+                        <label for="globalRounds">全局训练轮数</label>
+                        <div class="param-controls">
+                            <button class="param-btn" onclick="adjustParam('global', -1)">-</button>
+                            <span id="globalRounds" class="param-value">5</span>
+                            <button class="param-btn" onclick="adjustParam('global', 1)">+</button>
+                        </div>
+                        <div class="param-range">
+                            <small>范围: 1-20轮</small>
+                        </div>
+                    </div>
+                    <div class="parameter-control">
+                        <label for="localEpochs">本地训练轮数</label>
+                        <div class="param-controls">
+                            <button class="param-btn" onclick="adjustParam('local', -1)">-</button>
+                            <span id="localEpochs" class="param-value">2</span>
+                            <button class="param-btn" onclick="adjustParam('local', 1)">+</button>
+                        </div>
+                        <div class="param-range">
+                            <small>范围: 1-10轮</small>
+                        </div>
+                    </div>
+                </div>
+                <div class="estimated-time">
+                    <i class="fas fa-clock"></i>
+                    <span>预计训练时间: <span id="estimatedTime">约 10-15 分钟</span></span>
+                </div>
             </div>
 
             <div class="training-controls">
@@ -1041,15 +1203,78 @@
             }
         }
 
+        // 训练参数控制函数
+        let globalRounds = 5;
+        let localEpochs = 2;
+
+        function adjustParam(type, change) {
+            if (type === 'global') {
+                const newValue = globalRounds + change;
+                if (newValue >= 1 && newValue <= 20) {
+                    globalRounds = newValue;
+                    document.getElementById('globalRounds').textContent = globalRounds;
+                }
+                
+                // 更新按钮状态 - 使用更精确的选择器
+                const globalControls = document.querySelector('.parameter-control:first-child .param-controls');
+                const decreaseBtn = globalControls.querySelector('.param-btn:first-child');
+                const increaseBtn = globalControls.querySelector('.param-btn:last-child');
+                decreaseBtn.disabled = globalRounds <= 1;
+                increaseBtn.disabled = globalRounds >= 20;
+                
+            } else if (type === 'local') {
+                const newValue = localEpochs + change;
+                if (newValue >= 1 && newValue <= 10) {
+                    localEpochs = newValue;
+                    document.getElementById('localEpochs').textContent = localEpochs;
+                }
+                
+                // 更新按钮状态 - 使用更精确的选择器
+                const localControls = document.querySelector('.parameter-control:last-child .param-controls');
+                const decreaseBtn = localControls.querySelector('.param-btn:first-child');
+                const increaseBtn = localControls.querySelector('.param-btn:last-child');
+                decreaseBtn.disabled = localEpochs <= 1;
+                increaseBtn.disabled = localEpochs >= 10;
+            }
+            
+            // 更新预计时间
+            updateEstimatedTime();
+        }
+
+        function updateEstimatedTime() {
+            // 简单的时间估算逻辑：每个全局轮次大约2-3分钟，本地轮数会影响每轮时间
+            const baseTimePerRound = 2; // 基础时间（分钟）
+            const localEpochFactor = localEpochs * 0.5; // 本地轮数影响因子
+            const totalMinutes = globalRounds * (baseTimePerRound + localEpochFactor);
+            
+            let timeText;
+            if (totalMinutes < 60) {
+                timeText = `约 ${Math.round(totalMinutes)} 分钟`;
+            } else {
+                const hours = Math.floor(totalMinutes / 60);
+                const minutes = Math.round(totalMinutes % 60);
+                timeText = `约 ${hours} 小时 ${minutes} 分钟`;
+            }
+            
+            document.getElementById('estimatedTime').textContent = timeText;
+        }
+
         async function startFederatedTraining() {
             try {
                 const startBtn = document.getElementById('startTrainingBtn');
                 startBtn.disabled = true;
                 startBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>正在启动...';
                 
+                // 准备训练参数
+                const trainingParams = {
+                    global_rounds: globalRounds,
+                    local_epochs: localEpochs
+                };
+                
                 const response = await fetch('/server/start_training', {
                     method: 'POST',
-                    headers: {'Content-Type': 'application/json'}
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify(trainingParams)
                 });
                 
                 const result = await response.json();
@@ -1084,6 +1309,11 @@
         document.addEventListener('DOMContentLoaded', function() {
             // 设置初始状态
             updateTrainingStatus({{ training_status | tojson }});
+            
+            // 初始化训练参数控制
+            updateEstimatedTime();
+            adjustParam('global', 0); // 初始化按钮状态
+            adjustParam('local', 0);  // 初始化按钮状态
             
             // 如果已经在训练，开始轮询
             if (isTraining) {

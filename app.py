@@ -326,6 +326,15 @@ def start_training():
     if training_status["is_training"]:
         return jsonify({"error": "训练正在进行中"}), 400
 
+    # 获取训练参数（从请求中）
+    data = request.get_json() if request.is_json else {}
+    global_rounds = data.get("global_rounds", 5)  # 默认5轮
+    local_epochs = data.get("local_epochs", 2)  # 默认2个本地epochs
+
+    # 参数验证
+    global_rounds = max(1, min(20, int(global_rounds)))  # 限制在1-20之间
+    local_epochs = max(1, min(10, int(local_epochs)))  # 限制在1-10之间
+
     client_paths_for_training = []
     for client_name, status in client_data_status.items():
         if status.get("uploaded") and status.get("data_path"):
@@ -342,7 +351,7 @@ def start_training():
         {
             "is_training": True,
             "current_round": 0,
-            "total_rounds": 5,
+            "total_rounds": global_rounds,
             "active_clients": num_active_clients,
             "start_time": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
             "end_time": None,
@@ -350,7 +359,9 @@ def start_training():
         }
     )
 
-    add_server_log(f"开始联邦学习训练 - {num_active_clients} 个客户端参与")
+    add_server_log(
+        f"开始联邦学习训练 - {num_active_clients} 个客户端参与 (全局轮数: {global_rounds}, 本地轮数: {local_epochs})"
+    )
     add_training_log(f"训练初始化 - 客户端数据目录: {client_paths_for_training}")
 
     def run_training():
@@ -360,12 +371,14 @@ def start_training():
 
             add_training_log("正在启动联邦学习训练...")
             add_training_log(f"参与训练的客户端数量: {num_active_clients}")
+            add_training_log(f"全局训练轮数: {global_rounds}")
+            add_training_log(f"本地训练轮数: {local_epochs}")
             add_training_log(f"客户端数据路径: {client_paths_for_training}")
 
             coordinator = train_federated_model(
                 num_clients=num_active_clients,
-                global_rounds=5,
-                local_epochs=2,
+                global_rounds=global_rounds,
+                local_epochs=local_epochs,
                 client_data_dirs=client_paths_for_training,
             )
 
@@ -373,7 +386,7 @@ def start_training():
             training_status.update(
                 {
                     "is_training": False,
-                    "current_round": 5,
+                    "current_round": global_rounds,
                     "end_time": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
                     "progress": 100,
                 }
